@@ -7,8 +7,6 @@ from dotenv import load_dotenv
 import os
 import json
 import httpx
-from fpdf import FPDF
-from docx import Document
 
 # -------------------- Configurações externas --------------------
 st.set_page_config(page_title="Sistema Jurídico", layout="wide")
@@ -17,16 +15,38 @@ load_dotenv()
 DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY", "sk-b6021a65e36340b999b3e6817e064d50")
 DEEPSEEK_ENDPOINT = "https://api.deepseek.com/v1/chat/completions"
 
-HISTORICO_PETICOES = []
+def gerar_peticao_ia(prompt):
+    headers = {
+        "Content-Type": "application/json",
+        "Authorization": f"Bearer {DEEPSEEK_API_KEY}"
+    }
+    payload = {
+        "model": "deepseek-chat",
+        "messages": [
+            {"role": "system", "content": "Você é um advogado especialista em petições."},
+            {"role": "user", "content": prompt}
+        ]
+    }
+    try:
+        response = httpx.post(DEEPSEEK_ENDPOINT, headers=headers, json=payload)
+        resposta_json = response.json()
+        return resposta_json['choices'][0]['message']['content']
+    except Exception as e:
+        return f"❌ Erro ao gerar petição: {e}"
+
+GOOGLE_SHEETS_WEBHOOK = "https://script.google.com/macros/s/AKfycbytp0BA1x2PnjcFhunbgWEoMxZmCobyZHNzq3Mxabr41RScNAH-nYIlBd-OySWv5dcx/exec"
+
+# -------------------- Dados simulados --------------------
 USERS = {
     "dono": {"senha": "dono123", "papel": "owner"},
     "gestor1": {"senha": "gestor123", "papel": "manager", "escritorio": "Escritorio A"},
     "adv1": {"senha": "adv123", "papel": "lawyer", "escritorio": "Escritorio A", "area": "Cível"},
 }
+
 CLIENTES = []
 PROCESSOS = []
-GOOGLE_SHEETS_WEBHOOK = "https://script.google.com/macros/s/AKfycbytp0BA1x2PnjcFhunbgWEoMxZmCobyZHNzq3Mxabr41RScNAH-nYIlBd-OySWv5dcx/exec"
 
+# -------------------- Funções Auxiliares --------------------
 def login(usuario, senha):
     user = USERS.get(usuario)
     return user if user and user["senha"] == senha else None
@@ -60,64 +80,126 @@ def consultar_movimentacoes_simples(numero_processo):
     andamentos = soup.find_all("tr", class_="fundocinza1")
     return [a.get_text(strip=True) for a in andamentos[:5]] if andamentos else ["Nenhuma movimentação encontrada"]
 
-def exibir_peticoes_ia():
-    st.subheader("🤖 Gerador de Petições com IA")
-    cliente = st.text_input("Nome do Cliente")
-    prompt = st.text_area("Descreva sua necessidade jurídica")
-    if st.button("Gerar Petição") and prompt and cliente:
-        resposta = gerar_peticao_ia(prompt, cliente)
-        st.text_area("Petição Gerada", resposta, height=300)
+# -------------------- APP principal --------------------
+def main():
+    st.title("Sistema Jurídico com IA, Scraping e Google Sheets")
 
-        nome_pdf = f"peticao_{cliente.replace(' ', '_')}.pdf"
-        nome_docx = f"peticao_{cliente.replace(' ', '_')}.docx"
+    with st.sidebar:
+        st.header("Login")
+        usuario = st.text_input("Usuário")
+        senha = st.text_input("Senha", type="password")
+        if st.button("Entrar"):
+            user = login(usuario, senha)
+            if user:
+                st.session_state.usuario = usuario
+                st.session_state.papel = user["papel"]
+                st.session_state.dados_usuario = user
+            else:
+                st.error("Usuário ou senha incorretos")
 
-        col1, col2 = st.columns(2)
-        with col1:
-            if st.download_button("📄 Baixar PDF", data=open(exportar_peticao_pdf(nome_pdf, resposta), "rb").read(), file_name=nome_pdf):
-                st.success("PDF exportado!")
-        with col2:
-            if st.download_button("📝 Baixar DOCX", data=open(exportar_peticao_docx(nome_docx, resposta), "rb").read(), file_name=nome_docx):
-                st.success("DOCX exportado!")
+    if "usuario" in st.session_state:
+        papel = st.session_state.papel
+        st.sidebar.success(f"Bem-vindo, {st.session_state.usuario} ({papel})")
 
-def gerar_peticao_ia(prompt, cliente):
-    headers = {
-        "Content-Type": "application/json",
-        "Authorization": f"Bearer {DEEPSEEK_API_KEY}"
-    }
-    payload = {
-        "model": "deepseek-chat",
-        "messages": [
-            {"role": "system", "content": "Você é um advogado especialista em petições."},
-            {"role": "user", "content": prompt}
-        ]
-    }
-    try:
-        response = httpx.post(DEEPSEEK_ENDPOINT, headers=headers, json=payload)
-        resposta_json = response.json()
-        if "choices" in resposta_json and resposta_json["choices"]:
-            conteudo = resposta_json['choices'][0]['message']['content']
-            HISTORICO_PETICOES.append({"cliente": cliente, "conteudo": conteudo, "prompt": prompt, "data": datetime.datetime.now().strftime("%Y-%m-%d %H:%M")})
-            return conteudo
-        elif "error" in resposta_json:
-            return f"❌ Erro do DeepSeek: {resposta_json['error']['message']}"
-        else:
-            return f"❌ Resposta inesperada da API: {resposta_json}"
-    except Exception as e:
-        return f"❌ Erro ao gerar petição: {e}"
+        opcoes = ["Dashboard", "Clientes", "Processos", "Petições IA"]
+        if papel == "owner":
+            opcoes.append("Cadastrar Escritórios")
+        elif papel == "manager":
+            opcoes.append("Cadastrar Funcionários")
 
-def exportar_peticao_pdf(nome_arquivo, conteudo):
-    pdf = FPDF()
-    pdf.add_page()
-    pdf.set_auto_page_break(auto=True, margin=15)
-    pdf.set_font("Arial", size=12)
-    for linha in conteudo.split('\n'):
-        pdf.multi_cell(0, 10, linha)
-    pdf.output(nome_arquivo)
-    return nome_arquivo
+        escolha = st.sidebar.selectbox("Menu", opcoes)
 
-def exportar_peticao_docx(nome_arquivo, conteudo):
-    doc = Document()
-    for linha in conteudo.split("\n"):
-        doc.add_paragraph(linha)
-    doc.save(nome_arquivo)
-    return nome_arquivo
+        if escolha == "Dashboard":
+            st.subheader("📋 Processos em Andamento")
+            processos_visiveis = [p for p in PROCESSOS if papel == "owner" or
+                                  (papel == "manager" and p["escritorio"] == st.session_state.dados_usuario["escritorio"]) or
+                                  (papel == "lawyer" and p["escritorio"] == st.session_state.dados_usuario["escritorio"] and
+                                   p["area"] == st.session_state.dados_usuario["area"])]
+            for proc in processos_visiveis:
+                status = calcular_status_processo(proc.get("prazo"), proc.get("houve_movimentacao", False))
+                st.markdown(f"{status} **{proc['numero']}** - {proc['descricao']} (Cliente: {proc['cliente']})")
+
+        elif escolha == "Clientes":
+            st.subheader("👥 Cadastro de Clientes")
+            nome = st.text_input("Nome do Cliente")
+            email = st.text_input("Email")
+            telefone = st.text_input("Telefone")
+            aniversario = st.date_input("Data de Nascimento")
+            if st.button("Salvar Cliente"):
+                cliente = {
+                    "nome": nome,
+                    "email": email,
+                    "telefone": telefone,
+                    "aniversio": aniversario.strftime("%Y-%m-%d")
+                }
+                CLIENTES.append(cliente)
+                salvar_google_sheets({"tipo": "cliente", **cliente})
+
+        elif escolha == "Processos":
+            st.subheader("📄 Cadastro de Processo")
+            cliente_nome = st.text_input("Nome do Cliente Vinculado")
+            numero_processo = st.text_input("Número do Processo")
+            tipo_contrato = st.selectbox("Tipo de Contrato", ["Fixo", "Por Ato"])
+            descricao = st.text_area("Descrição do Processo")
+            valor_total = st.number_input("Valor Total", min_value=0.0, format="%.2f")
+            valor_movimentado = st.number_input("Valor Movimentado", min_value=0.0, format="%.2f")
+            prazo = st.date_input("Prazo Final", value=datetime.date.today() + datetime.timedelta(days=30))
+            houve_movimentacao = st.checkbox("Houve movimentação recente?")
+            area = st.selectbox("Área", ["Cível", "Criminal", "Trabalhista", "Previdenciário"])
+            if st.button("Salvar Processo"):
+                processo = {
+                    "cliente": cliente_nome,
+                    "numero": numero_processo,
+                    "tipo_contrato": tipo_contrato,
+                    "descricao": descricao,
+                    "valor_total": valor_total,
+                    "valor_movimentado": valor_movimentado,
+                    "prazo": prazo.strftime("%Y-%m-%d"),
+                    "houve_movimentacao": houve_movimentacao,
+                    "escritorio": st.session_state.dados_usuario.get("escritorio", "Global"),
+                    "area": area
+                }
+                PROCESSOS.append(processo)
+                salvar_google_sheets({"tipo": "processo", **processo})
+
+            st.markdown("---")
+            st.subheader("🔎 Consultar Andamentos (Simulado)")
+            num_consulta = st.text_input("Nº do processo para consulta")
+            if st.button("Consultar TJSP"):
+                resultados = consultar_movimentacoes_simples(num_consulta)
+                for r in resultados:
+                    st.markdown(f"- {r}")
+
+        elif escolha == "Petições IA":
+            st.subheader("🤖 Gerador de Petições com IA")
+            prompt = st.text_area("Descreva sua necessidade jurídica")
+            if st.button("Gerar Petição"):
+                resposta = gerar_peticao_ia(prompt)
+                st.text_area("Petição Gerada", resposta, height=300)
+
+        elif escolha == "Cadastrar Escritórios":
+            st.subheader("🏢 Cadastro de Escritórios")
+            nome_esc = st.text_input("Nome do Escritório")
+            usuario_esc = st.text_input("Usuário")
+            senha_esc = st.text_input("Senha")
+            if st.button("Cadastrar Escritório"):
+                USERS[usuario_esc] = {"senha": senha_esc, "papel": "manager", "escritorio": nome_esc}
+                st.success("Escritório cadastrado com sucesso!")
+
+        elif escolha == "Cadastrar Funcionários":
+            st.subheader("👩‍⚖️ Cadastro de Funcionários")
+            nome_func = st.text_input("Nome")
+            usuario_func = st.text_input("Usuário")
+            senha_func = st.text_input("Senha")
+            area_func = st.selectbox("Área", ["Cível", "Criminal", "Trabalhista", "Previdenciário"])
+            if st.button("Cadastrar Funcionário"):
+                USERS[usuario_func] = {
+                    "senha": senha_func,
+                    "papel": "lawyer",
+                    "escritorio": st.session_state.dados_usuario["escritorio"],
+                    "area": area_func
+                }
+                st.success("Funcionário cadastrado com sucesso!")
+
+if __name__ == '__main__':
+    main()

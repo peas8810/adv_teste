@@ -61,7 +61,7 @@ def consultar_movimentacoes_simples(numero_processo):
     andamentos = soup.find_all("tr", class_="fundocinza1")
     return [a.get_text(strip=True) for a in andamentos[:5]] if andamentos else ["Nenhuma movimentação encontrada"]
 
-def gerar_peticao_ia(prompt):
+def gerar_peticao_ia(prompt, temperatura=0.7, max_tokens=2000):
     headers = {
         "Content-Type": "application/json",
         "Authorization": f"Bearer {DEEPSEEK_API_KEY}"
@@ -69,16 +69,32 @@ def gerar_peticao_ia(prompt):
     payload = {
         "model": "deepseek-chat",
         "messages": [
-            {"role": "system", "content": "Você é um advogado especialista em petições."},
+            {"role": "system", "content": "Você é um advogado especialista em petições. Responda com linguagem jurídica formal e precisa."},
             {"role": "user", "content": prompt}
-        ]
+        ],
+        "temperature": temperatura,
+        "max_tokens": max_tokens
     }
     try:
-        response = httpx.post(DEEPSEEK_ENDPOINT, headers=headers, json=payload)
+        response = httpx.post(DEEPSEEK_ENDPOINT, headers=headers, json=payload, timeout=30)
+        response.raise_for_status()
         resposta_json = response.json()
+        
+        if not resposta_json.get('choices') or not resposta_json['choices'][0].get('message'):
+            st.error("Resposta inesperada da API")
+            return "Erro: Resposta da API não contém os dados esperados"
+            
         return resposta_json['choices'][0]['message']['content']
+        
+    except httpx.HTTPStatusError as e:
+        st.error(f"Erro HTTP {e.response.status_code}: {e.response.text}")
+        return f"❌ Erro na requisição: {str(e)}"
+    except json.JSONDecodeError:
+        st.error("Não foi possível decodificar a resposta da API")
+        return "❌ Erro ao processar resposta da API"
     except Exception as e:
-        return f"❌ Erro ao gerar petição: {e}"
+        st.error(f"Erro inesperado: {str(e)}")
+        return f"❌ Erro ao gerar petição: {str(e)}"
 
 def exportar_pdf(texto):
     pdf = FPDF()
@@ -222,96 +238,88 @@ def main():
                 for r in resultados:
                     st.markdown(f"- {r}")
 
-              elif escolha == "Petições IA":
-                st.subheader("🤖 Gerador de Petições com IA")
-                
-                # Adicionar seleção de modelo/template
-                tipo_peticao = st.selectbox(
-                    "Tipo de Petição",
-                    ["Geral", "Inicial Cível", "Resposta", "Recurso", "Outros"],
-                    help="Selecione o tipo de petição para orientar a IA"
-                )
-                
-                # Área de texto com placeholder explicativo
-                prompt = st.text_area(
-                    "Descreva sua necessidade jurídica",
-                    placeholder="Ex: 'Preciso de uma petição inicial de indenização por danos morais contra uma empresa de telecomunicações...'",
-                    height=150
-                )
-                
-                # Adicionar configurações avançadas
-                with st.expander("Configurações Avançadas"):
-                    col1, col2 = st.columns(2)
-                    with col1:
-                        temperatura = st.slider("Criatividade", 0.1, 1.0, 0.7, help="Valores mais altos = mais criativo, valores mais baixos = mais previsível")
-                    with col2:
-                        max_tokens = st.number_input("Tamanho máximo", min_value=100, max_value=4000, value=2000, step=100)
-                
-                if st.button("Gerar Petição", type="primary"):
-                    if not prompt.strip():
-                        st.warning("Por favor, descreva sua necessidade jurídica")
-                        st.stop()
-                        
-                    with st.spinner("Gerando petição com IA..."):
-                        try:
-                            # Modificar o prompt com base no tipo selecionado
-                            prompt_final = f"Tipo: {tipo_peticao}\n\n{prompt}" if tipo_peticao != "Geral" else prompt
-                            
-                            resposta = gerar_peticao_ia(prompt_final)
-                            
-                            if resposta.startswith("❌ Erro"):
-                                st.error(resposta)
-                            else:
-                                # Exibir a petição gerada
-                                st.subheader("📝 Petição Gerada")
-                                st.text_area("", resposta, height=300, key="peticao_gerada")
-                                
-                                # Adicionar ao histórico
-                                HISTORICO_PETICOES.append({
-                                    "usuario": st.session_state.usuario,
-                                    "data": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                                    "tipo": tipo_peticao,
-                                    "prompt": prompt,
-                                    "resposta": resposta
-                                })
-                    
-                    # Opções de exportação
-                    st.subheader("💾 Exportar Petição")
-                    col1, col2, col3 = st.columns(3)
-                    
-                    with col1:
-                        pdf_path = gerar_pdf(resposta)
-                        with open(pdf_path, "rb") as file:
-                            st.download_button(
-                                label="📄 Baixar PDF",
-                                data=file,
-                                file_name=f"peticao_{tipo_peticao.lower().replace(' ', '_')}.pdf",
-                                mime="application/pdf",
-                                help="Baixar em formato PDF"
-                            )
-                    
-                    with col2:
-                        docx_path = exportar_docx(resposta)
-                        with open(docx_path, "rb") as file:
-                            st.download_button(
-                                label="📝 Baixar Word",
-                                data=file,
-                                file_name=f"peticao_{tipo_peticao.lower().replace(' ', '_')}.docx",
-                                mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-                                help="Baixar em formato Word"
-                            )
-                    
-                    with col3:
-                        st.button(
-                            "🗂️ Copiar para Histórico",
-                            help="A petição já foi automaticamente salva no histórico",
-                            disabled=True
-                        )
-                    
-                    st.success("Petição gerada com sucesso!")
+        elif escolha == "Petições IA":
+            st.subheader("🤖 Gerador de Petições com IA")
             
-            except Exception as e:
-                st.error(f"Falha ao gerar petição: {str(e)}")
+            tipo_peticao = st.selectbox(
+                "Tipo de Petição",
+                ["Geral", "Inicial Cível", "Resposta", "Recurso", "Outros"],
+                help="Selecione o tipo de petição para orientar a IA"
+            )
+            
+            prompt = st.text_area(
+                "Descreva sua necessidade jurídica",
+                placeholder="Ex: 'Preciso de uma petição inicial de indenização por danos morais contra uma empresa de telecomunicações...'",
+                height=150
+            )
+            
+            with st.expander("Configurações Avançadas"):
+                col1, col2 = st.columns(2)
+                with col1:
+                    temperatura = st.slider("Criatividade", 0.1, 1.0, 0.7, help="Valores mais altos = mais criativo, valores mais baixos = mais previsível")
+                with col2:
+                    max_tokens = st.number_input("Tamanho máximo", min_value=100, max_value=4000, value=2000, step=100)
+            
+            if st.button("Gerar Petição", type="primary"):
+                if not prompt.strip():
+                    st.warning("Por favor, descreva sua necessidade jurídica")
+                    st.stop()
+                    
+                with st.spinner("Gerando petição com IA..."):
+                    try:
+                        prompt_final = f"Tipo: {tipo_peticao}\n\n{prompt}" if tipo_peticao != "Geral" else prompt
+                        resposta = gerar_peticao_ia(prompt_final, temperatura, max_tokens)
+                        
+                        if resposta.startswith("❌ Erro"):
+                            st.error(resposta)
+                        else:
+                            st.subheader("📝 Petição Gerada")
+                            st.text_area("", resposta, height=300, key="peticao_gerada")
+                            
+                            HISTORICO_PETICOES.append({
+                                "usuario": st.session_state.usuario,
+                                "data": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                                "tipo": tipo_peticao,
+                                "prompt": prompt,
+                                "resposta": resposta
+                            })
+                            
+                            st.subheader("💾 Exportar Petição")
+                            col1, col2, col3 = st.columns(3)
+                            
+                            with col1:
+                                pdf_path = gerar_pdf(resposta)
+                                with open(pdf_path, "rb") as file:
+                                    st.download_button(
+                                        label="📄 Baixar PDF",
+                                        data=file,
+                                        file_name=f"peticao_{tipo_peticao.lower().replace(' ', '_')}.pdf",
+                                        mime="application/pdf",
+                                        help="Baixar em formato PDF"
+                                    )
+                            
+                            with col2:
+                                docx_path = exportar_docx(resposta)
+                                with open(docx_path, "rb") as file:
+                                    st.download_button(
+                                        label="📝 Baixar Word",
+                                        data=file,
+                                        file_name=f"peticao_{tipo_peticao.lower().replace(' ', '_')}.docx",
+                                        mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                                        help="Baixar em formato Word"
+                                    )
+                            
+                            with col3:
+                                st.button(
+                                    "🗂️ Copiar para Histórico",
+                                    help="A petição já foi automaticamente salva no histórico",
+                                    disabled=True
+                                )
+                            
+                            st.success("Petição gerada com sucesso!")
+                    
+                    except Exception as e:
+                        st.error(f"Falha ao gerar petição: {str(e)}")
 
         elif escolha == "Histórico de Petições":
             st.subheader("📜 Histórico de Petições Geradas")

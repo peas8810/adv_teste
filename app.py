@@ -9,6 +9,7 @@ import json
 import httpx
 from fpdf import FPDF
 from docx import Document
+import time
 
 # -------------------- Configurações --------------------
 st.set_page_config(page_title="Sistema Jurídico", layout="wide")
@@ -55,21 +56,22 @@ def consultar_movimentacoes_simples(numero_processo):
     andamentos = soup.find_all("tr", class_="fundocinza1")
     return [a.get_text(strip=True) for a in andamentos[:5]] if andamentos else ["Nenhuma movimentação encontrada"]
 
-def gerar_peticao_ia(prompt, temperatura=0.7, max_tokens=2000):
-    """Gera petição usando a API DeepSeek"""
+def gerar_peticao_ia(prompt, temperatura=0.7, max_tokens=2000, tentativas=3):
+    """Gera petição com tratamento robusto de timeout e retry"""
     headers = {
         "Content-Type": "application/json",
         "Authorization": f"Bearer {DEEPSEEK_API_KEY}"
     }
+    
     payload = {
         "model": "deepseek-chat",
         "messages": [
             {
-                "role": "system", 
-                "content": "Você é um advogado especialista em petições jurídicas. Responda com linguagem formal e técnica."
+                "role": "system",
+                "content": "Você é um assistente jurídico especializado. Responda com linguagem técnica formal."
             },
             {
-                "role": "user", 
+                "role": "user",
                 "content": prompt
             }
         ],
@@ -77,42 +79,139 @@ def gerar_peticao_ia(prompt, temperatura=0.7, max_tokens=2000):
         "max_tokens": max_tokens
     }
     
-    try:
-        response = httpx.post(DEEPSEEK_ENDPOINT, headers=headers, json=payload, timeout=30)
-        response.raise_for_status()
-        resposta_json = response.json()
-        
-        if not resposta_json.get('choices'):
-            raise ValueError("Resposta da API não contém dados esperados")
+    for tentativa in range(tentativas):
+        try:
+            start_time = time.time()
             
-        return resposta_json['choices'][0]['message']['content']
-        
-    except httpx.HTTPStatusError as e:
-        st.error(f"Erro na API DeepSeek: {e.response.text}")
-        return f"❌ Erro na API: {str(e)}"
-    except Exception as e:
-        st.error(f"Erro inesperado: {str(e)}")
-        return f"❌ Erro ao gerar petição: {str(e)}"
+            # Reduz o timeout para 25 segundos com retry automático
+            with httpx.Client(timeout=25) as client:
+                response = client.post(
+                    DEEPSEEK_ENDPOINT,
+                    headers=headers,
+                    json=payload
+                )
+            
+            response_time = time.time() - start_time
+            st.sidebar.metric("Tempo de resposta API", f"{response_time:.2f}s")
+            
+            response.raise_for_status()
+            resposta_json = response.json()
+            
+            if not resposta_json.get('choices'):
+                raise ValueError("Resposta da API incompleta")
+                
+            return resposta_json['choices'][0]['message']['content']
+            
+        except httpx.ReadTimeout:
+            if tentativa < tentativas - 1:
+                st.warning(f"Tentativa {tentativa + 1} falhou (timeout). Tentando novamente...")
+                continue
+            else:
+                raise Exception("O servidor demorou muito para responder após várias tentativas")
+                
+        except httpx.HTTPStatusError as e:
+            error_msg = f"Erro HTTP {e.response.status_code}"
+            if e.response.status_code == 402:
+                error_msg += " - Saldo insuficiente na API"
+            raise Exception(f"{error_msg}: {e.response.text}")
+            
+        except Exception as e:
+            if tentativa == tentativas - 1:  # Última tentativa
+                raise Exception(f"Erro na requisição: {str(e)}")
+            continue
+    
+    return "❌ Falha ao gerar petição após múltiplas tentativas"
 
-def exportar_pdf(texto, nome_arquivo="peticao"):
-    """Exporta texto para PDF"""
+def exportar_pdf(texto, nome_arquivo="documento"):
+    """Exporta texto para PDF com formatação melhorada"""
     pdf = FPDF()
     pdf.add_page()
     pdf.set_font("Arial", size=12)
+    
+    # Adiciona título
+    pdf.set_font("Arial", 'B', 16)
+    pdf.cell(0, 10, nome_arquivo.replace('_', ' ').title(), 0, 1, 'C')
+    pdf.ln(10)
+    
+    # Adiciona conteúdo
+    pdf.set_font("Arial", size=12)
     for linha in texto.split("\n"):
         pdf.multi_cell(0, 10, linha)
+    
+    # Adiciona rodapé
+    pdf.set_y(-15)
+    pdf.set_font("Arial", 'I', 8)
+    pdf.cell(0, 10, f"Gerado em {datetime.datetime.now().strftime('%d/%m/%Y %H:%M')}", 0, 0, 'C')
+    
     pdf_path = f"{nome_arquivo}.pdf"
     pdf.output(pdf_path)
     return pdf_path
 
-def exportar_docx(texto, nome_arquivo="peticao"):
-    """Exporta texto para DOCX"""
+def exportar_docx(texto, nome_arquivo="documento"):
+    """Exporta texto para DOCX com formatação"""
     doc = Document()
+    
+    # Adiciona título
+    doc.add_heading(nome_arquivo.replace('_', ' ').title(), 0)
+    
+    # Adiciona conteúdo
     for linha in texto.split("\n"):
         doc.add_paragraph(linha)
+    
+    # Adiciona rodapé
+    section = doc.sections[0]
+    footer = section.footer
+    footer_para = footer.paragraphs[0]
+    footer_para.text = f"Gerado em {datetime.datetime.now().strftime('%d/%m/%Y %H:%M')}"
+    
     docx_path = f"{nome_arquivo}.docx"
     doc.save(docx_path)
     return docx_path
+
+def gerar_relatorio_pdf(dados, titulo="Relatório"):
+    """Gera um relatório em PDF formatado"""
+    pdf = FPDF()
+    pdf.add_page()
+    pdf.set_font("Arial", size=12)
+    
+    # Cabeçalho
+    pdf.set_font("Arial", 'B', 16)
+    pdf.cell(0, 10, titulo, 0, 1, 'C')
+    pdf.ln(10)
+    
+    # Conteúdo
+    pdf.set_font("Arial", size=12)
+    
+    if isinstance(dados, dict):
+        for chave, valor in dados.items():
+            pdf.set_font("Arial", 'B', 12)
+            pdf.cell(0, 10, f"{chave}:", 0, 1)
+            pdf.set_font("Arial", size=12)
+            pdf.multi_cell(0, 10, str(valor))
+            pdf.ln(5)
+    elif isinstance(dados, list):
+        for item in dados:
+            if isinstance(item, dict):
+                for chave, valor in item.items():
+                    pdf.set_font("Arial", 'B', 12)
+                    pdf.cell(0, 10, f"{chave}:", 0, 1)
+                    pdf.set_font("Arial", size=12)
+                    pdf.multi_cell(0, 10, str(valor))
+                    pdf.ln(5)
+            else:
+                pdf.multi_cell(0, 10, str(item))
+            pdf.ln(5)
+    else:
+        pdf.multi_cell(0, 10, str(dados))
+    
+    # Rodapé
+    pdf.set_y(-15)
+    pdf.set_font("Arial", 'I', 8)
+    pdf.cell(0, 10, f"Gerado em {datetime.datetime.now().strftime('%d/%m/%Y %H:%M')}", 0, 0, 'C')
+    
+    relatorio_path = f"relatorio_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf"
+    pdf.output(relatorio_path)
+    return relatorio_path
 
 def aplicar_filtros(dados, campos):
     """Aplica filtros aos dados"""
@@ -175,6 +274,20 @@ def main():
                                 p["area"] == st.session_state.dados_usuario["area"])]
             
             if processos_visiveis:
+                # Botão para exportar relatório
+                if st.button("📊 Exportar Relatório de Processos", key="export_processos"):
+                    relatorio_path = gerar_relatorio_pdf(
+                        processos_visiveis,
+                        "Relatório de Processos"
+                    )
+                    with open(relatorio_path, "rb") as f:
+                        st.download_button(
+                            "⬇️ Baixar Relatório PDF",
+                            f,
+                            file_name=os.path.basename(relatorio_path),
+                            mime="application/pdf"
+                        )
+                
                 for proc in processos_visiveis:
                     prazo_default = (datetime.date.today() + datetime.timedelta(days=30)).strftime("%Y-%m-%d") 
                     data_prazo_str = proc.get("prazo", prazo_default)
@@ -213,6 +326,21 @@ def main():
                     }
                     CLIENTES.append(novo_cliente)
                     st.success("Cliente cadastrado com sucesso!")
+            
+            # Botão para exportar relatório de clientes
+            if CLIENTES:
+                if st.button("📊 Exportar Relatório de Clientes", key="export_clientes"):
+                    relatorio_path = gerar_relatorio_pdf(
+                        CLIENTES,
+                        "Relatório de Clientes"
+                    )
+                    with open(relatorio_path, "rb") as f:
+                        st.download_button(
+                            "⬇️ Baixar Relatório PDF",
+                            f,
+                            file_name=os.path.basename(relatorio_path),
+                            mime="application/pdf"
+                        )
 
         # Processos
         elif escolha == "Processos":
@@ -260,6 +388,21 @@ def main():
                     if num_consulta:
                         resultados = consultar_movimentacoes_simples(num_consulta)
                         st.subheader(f"Últimas movimentações do processo {num_consulta}")
+                        
+                        # Botão para exportar consulta
+                        if resultados:
+                            relatorio_path = exportar_pdf(
+                                "\n".join(resultados),
+                                f"consulta_processo_{num_consulta}"
+                            )
+                            with open(relatorio_path, "rb") as f:
+                                st.download_button(
+                                    "📄 Exportar Consulta em PDF",
+                                    f,
+                                    file_name=f"consulta_processo_{num_consulta}.pdf",
+                                    mime="application/pdf"
+                                )
+                        
                         for i, r in enumerate(resultados, 1):
                             st.write(f"{i}. {r}")
                     else:
@@ -302,59 +445,70 @@ def main():
                     st.warning("Por favor, descreva sua necessidade jurídica")
                 else:
                     with st.spinner("Processando sua petição com IA..."):
-                        # Adiciona contexto jurídico ao prompt
-                        prompt_enhanced = f"""
-                        Tipo de Documento: {tipo_peticao}
-                        Requisitos Jurídicos: {prompt}
-                        
-                        Por favor, gere um documento jurídico completo com:
-                        1. Estrutura formal adequada
-                        2. Fundamentação jurídica pertinente
-                        3. Linguagem técnica apropriada
-                        4. Referências legais quando aplicável
-                        """
-                        
-                        resposta = gerar_peticao_ia(prompt_enhanced, temperatura, max_tokens)
-                        
-                        if resposta.startswith("❌ Erro"):
-                            st.error(resposta)
-                        else:
-                            # Salva no histórico
-                            HISTORICO_PETICOES.append({
-                                "usuario": st.session_state.usuario,
-                                "data": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                                "tipo": tipo_peticao,
-                                "prompt": prompt,
-                                "resposta": resposta
-                            })
+                        try:
+                            # Adiciona contexto jurídico ao prompt
+                            prompt_enhanced = f"""
+                            Tipo de Documento: {tipo_peticao}
+                            Requisitos Jurídicos: {prompt}
                             
-                            # Exibe resultado
-                            st.subheader("📝 Documento Gerado")
-                            st.text_area("", resposta, height=400, key="doc_gerado")
+                            Por favor, gere um documento jurídico completo com:
+                            1. Estrutura formal adequada
+                            2. Fundamentação jurídica pertinente
+                            3. Linguagem técnica apropriada
+                            4. Referências legais quando aplicável
+                            """
                             
-                            # Opções de exportação
-                            nome_arquivo = f"peticao_{tipo_peticao.lower().replace(' ', '_')}_{datetime.datetime.now().strftime('%Y%m%d')}"
+                            resposta = gerar_peticao_ia(prompt_enhanced, temperatura, max_tokens)
                             
-                            if formato == "PDF":
-                                caminho = exportar_pdf(resposta, nome_arquivo)
-                                with open(caminho, "rb") as f:
-                                    st.download_button(
-                                        "⬇️ Baixar PDF",
-                                        f,
-                                        file_name=f"{nome_arquivo}.pdf",
-                                        mime="application/pdf"
-                                    )
+                            if resposta.startswith("❌ Erro"):
+                                st.error(resposta)
                             else:
-                                caminho = exportar_docx(resposta, nome_arquivo)
-                                with open(caminho, "rb") as f:
-                                    st.download_button(
-                                        "⬇️ Baixar DOCX",
-                                        f,
-                                        file_name=f"{nome_arquivo}.docx",
-                                        mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-                                    )
-                            
-                            st.success("Documento gerado com sucesso!")
+                                # Salva no histórico
+                                HISTORICO_PETICOES.append({
+                                    "usuario": st.session_state.usuario,
+                                    "data": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                                    "tipo": tipo_peticao,
+                                    "prompt": prompt,
+                                    "resposta": resposta
+                                })
+                                
+                                # Exibe resultado
+                                st.subheader("📝 Documento Gerado")
+                                st.text_area("", resposta, height=400, key="doc_gerado")
+                                
+                                # Opções de exportação
+                                nome_arquivo = f"peticao_{tipo_peticao.lower().replace(' ', '_')}_{datetime.datetime.now().strftime('%Y%m%d')}"
+                                
+                                if formato == "PDF":
+                                    caminho = exportar_pdf(resposta, nome_arquivo)
+                                    with open(caminho, "rb") as f:
+                                        st.download_button(
+                                            "⬇️ Baixar PDF",
+                                            f,
+                                            file_name=f"{nome_arquivo}.pdf",
+                                            mime="application/pdf"
+                                        )
+                                else:
+                                    caminho = exportar_docx(resposta, nome_arquivo)
+                                    with open(caminho, "rb") as f:
+                                        st.download_button(
+                                            "⬇️ Baixar DOCX",
+                                            f,
+                                            file_name=f"{nome_arquivo}.docx",
+                                            mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                                        )
+                                
+                                st.success("Documento gerado com sucesso!")
+                        
+                        except Exception as e:
+                            st.error(f"Falha ao gerar petição: {str(e)}")
+                            st.info("""
+                            Dicas para resolver:
+                            1. Verifique sua conexão com a internet
+                            2. Tente um prompt mais curto
+                            3. Reduza o 'Tamanho máximo' nas configurações
+                            4. Tente novamente em alguns minutos
+                            """)
 
         # Histórico
         elif escolha == "Histórico":
@@ -363,6 +517,20 @@ def main():
             if not HISTORICO_PETICOES:
                 st.info("Nenhuma petição gerada ainda")
             else:
+                # Botão para exportar todo o histórico
+                if st.button("📊 Exportar Histórico Completo", key="export_historico"):
+                    relatorio_path = gerar_relatorio_pdf(
+                        HISTORICO_PETICOES,
+                        "Histórico Completo de Petições"
+                    )
+                    with open(relatorio_path, "rb") as f:
+                        st.download_button(
+                            "⬇️ Baixar Relatório PDF",
+                            f,
+                            file_name=os.path.basename(relatorio_path),
+                            mime="application/pdf"
+                        )
+                
                 for idx, peticao in enumerate(reversed(HISTORICO_PETICOES), 1):
                     with st.expander(f"#{idx} - {peticao['tipo']} ({peticao['data']})"):
                         st.write(f"**Usuário:** {peticao['usuario']}")
@@ -416,9 +584,37 @@ def main():
                 
                 st.bar_chart(areas)
                 
+                # Botão para exportar relatório
+                if st.button("📄 Exportar Relatório PDF", key="export_processos_area"):
+                    relatorio_path = gerar_relatorio_pdf(
+                        {"Processos por Área": areas},
+                        "Relatório de Processos por Área"
+                    )
+                    with open(relatorio_path, "rb") as f:
+                        st.download_button(
+                            "⬇️ Baixar Relatório",
+                            f,
+                            file_name=os.path.basename(relatorio_path),
+                            mime="application/pdf"
+                        )
+                
             elif tipo_relatorio == "Clientes Ativos":
                 st.write("Lista de Clientes:")
                 st.dataframe(CLIENTES)
+                
+                # Botão para exportar relatório
+                if st.button("📄 Exportar Relatório PDF", key="export_clientes_ativos"):
+                    relatorio_path = gerar_relatorio_pdf(
+                        CLIENTES,
+                        "Relatório de Clientes Ativos"
+                    )
+                    with open(relatorio_path, "rb") as f:
+                        st.download_button(
+                            "⬇️ Baixar Relatório",
+                            f,
+                            file_name=os.path.basename(relatorio_path),
+                            mime="application/pdf"
+                        )
                 
             elif tipo_relatorio == "Petições Geradas":
                 st.write("Estatísticas de Petições:")
@@ -437,28 +633,23 @@ def main():
                     st.write("Últimas 5 Petições:")
                     for p in HISTORICO_PETICOES[-5:]:
                         st.write(f"- {p['tipo']} ({p['data']})")
-            
-            # Opção de exportação
-            if st.button("Exportar Relatório"):
-                relatorio = {
-                    "tipo": tipo_relatorio,
-                    "data": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                    "gerado_por": st.session_state.usuario
-                }
                 
-                if tipo_relatorio == "Processos por Área":
-                    relatorio["dados"] = { "processos_por_area": areas }
-                elif tipo_relatorio == "Clientes Ativos":
-                    relatorio["dados"] = { "clientes": CLIENTES }
-                
-                caminho = exportar_pdf(json.dumps(relatorio, indent=2), f"relatorio_{tipo_relatorio.lower().replace(' ', '_')}")
-                with open(caminho, "rb") as f:
-                    st.download_button(
-                        "Baixar Relatório",
-                        f,
-                        file_name=f"relatorio_{tipo_relatorio.lower().replace(' ', '_')}.pdf",
-                        mime="application/pdf"
+                # Botão para exportar relatório
+                if st.button("📄 Exportar Relatório PDF", key="export_peticoes"):
+                    relatorio_path = gerar_relatorio_pdf(
+                        {
+                            "Estatísticas por Tipo": tipos,
+                            "Últimas Petições": HISTORICO_PETICOES[-5:]
+                        },
+                        "Relatório de Petições Geradas"
                     )
+                    with open(relatorio_path, "rb") as f:
+                        st.download_button(
+                            "⬇️ Baixar Relatório",
+                            f,
+                            file_name=os.path.basename(relatorio_path),
+                            mime="application/pdf"
+                        )
 
         # Cadastro de Escritórios (Owner)
         elif escolha == "Cadastrar Escritórios" and papel == "owner":

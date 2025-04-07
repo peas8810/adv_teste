@@ -1,9 +1,36 @@
+# Arquivos de ambiente
 .env
+.env.local
+
+# Arquivos do Python
 __pycache__/
 *.py[cod]
+*$py.class
+
+# Arquivos de configuração
+.venv
+venv/
+ENV/
+
+# Arquivos do editor
+.idea
+.vscode
+*.swp
+*.swo
+
+# Arquivos de sistema
+.DS_Store
+Thumbs.db
+
+# Arquivos de log e dados
 *.log
+*.sqlite
+*.db
+
+# Arquivos gerados
 *.pdf
 *.docx
-.idea/
-.vscode/
-.env.*
+data.json
+
+# Arquivos do Streamlit
+.streamlit/

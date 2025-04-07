@@ -134,7 +134,7 @@ def main():
                 processo = {
                     "cliente": cliente_nome,
                     "numero": numero_processo,
-                    "tipo": tipo_contrato,
+                    "tipo_contrato": tipo_contrato,
                     "descricao": descricao,
                     "valor_total": valor_total,
                     "valor_movimentado": valor_movimentado,

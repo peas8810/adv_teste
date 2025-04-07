@@ -4,9 +4,12 @@ import datetime
 import requests
 from openai import OpenAI
 from bs4 import BeautifulSoup
+from dotenv import load_dotenv
+import os
 
 # -------------------- Configurações externas --------------------
-client = OpenAI(api_key="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")
+load_dotenv()
+client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 GOOGLE_SHEETS_WEBHOOK = "https://script.google.com/macros/s/AKfycbytp0BA1x2PnjcFhunbgWEoMxZmCobyZHNzq3Mxabr41RScNAH-nYIlBd-OySWv5dcx/exec"
 
 # -------------------- Dados simulados --------------------

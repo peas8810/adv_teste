@@ -3,6 +3,8 @@ requests
 beautifulsoup4
 python-dotenv
 httpx
-fpdf
+fpdf2
 python-docx
 gspread
+oauth2client
+pandas

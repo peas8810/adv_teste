@@ -7,6 +7,8 @@ from dotenv import load_dotenv
 import os
 import json
 import httpx
+from fpdf import FPDF
+from docx import Document
 
 # -------------------- Configurações externas --------------------
 st.set_page_config(page_title="Sistema Jurídico", layout="wide")
@@ -15,38 +17,16 @@ load_dotenv()
 DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY", "sk-b6021a65e36340b999b3e6817e064d50")
 DEEPSEEK_ENDPOINT = "https://api.deepseek.com/v1/chat/completions"
 
-def gerar_peticao_ia(prompt):
-    headers = {
-        "Content-Type": "application/json",
-        "Authorization": f"Bearer {DEEPSEEK_API_KEY}"
-    }
-    payload = {
-        "model": "deepseek-chat",
-        "messages": [
-            {"role": "system", "content": "Você é um advogado especialista em petições."},
-            {"role": "user", "content": prompt}
-        ]
-    }
-    try:
-        response = httpx.post(DEEPSEEK_ENDPOINT, headers=headers, json=payload)
-        resposta_json = response.json()
-        return resposta_json['choices'][0]['message']['content']
-    except Exception as e:
-        return f"❌ Erro ao gerar petição: {e}"
-
-GOOGLE_SHEETS_WEBHOOK = "https://script.google.com/macros/s/AKfycbytp0BA1x2PnjcFhunbgWEoMxZmCobyZHNzq3Mxabr41RScNAH-nYIlBd-OySWv5dcx/exec"
-
-# -------------------- Dados simulados --------------------
+HISTORICO_PETICOES = []
 USERS = {
     "dono": {"senha": "dono123", "papel": "owner"},
     "gestor1": {"senha": "gestor123", "papel": "manager", "escritorio": "Escritorio A"},
     "adv1": {"senha": "adv123", "papel": "lawyer", "escritorio": "Escritorio A", "area": "Cível"},
 }
-
 CLIENTES = []
 PROCESSOS = []
+GOOGLE_SHEETS_WEBHOOK = "https://script.google.com/macros/s/AKfycbytp0BA1x2PnjcFhunbgWEoMxZmCobyZHNzq3Mxabr41RScNAH-nYIlBd-OySWv5dcx/exec"
 
-# -------------------- Funções Auxiliares --------------------
 def login(usuario, senha):
     user = USERS.get(usuario)
     return user if user and user["senha"] == senha else None
@@ -80,7 +60,25 @@ def consultar_movimentacoes_simples(numero_processo):
     andamentos = soup.find_all("tr", class_="fundocinza1")
     return [a.get_text(strip=True) for a in andamentos[:5]] if andamentos else ["Nenhuma movimentação encontrada"]
 
-# -------------------- APP principal --------------------
+def gerar_peticao_ia(prompt):
+    headers = {
+        "Content-Type": "application/json",
+        "Authorization": f"Bearer {DEEPSEEK_API_KEY}"
+    }
+    payload = {
+        "model": "deepseek-chat",
+        "messages": [
+            {"role": "system", "content": "Você é um advogado especialista em petições."},
+            {"role": "user", "content": prompt}
+        ]
+    }
+    try:
+        response = httpx.post(DEEPSEEK_ENDPOINT, headers=headers, json=payload)
+        resposta_json = response.json()
+        return resposta_json['choices'][0]['message']['content']
+    except Exception as e:
+        return f"❌ Erro ao gerar petição: {e}"
+
 def main():
     st.title("Sistema Jurídico com IA, Scraping e Google Sheets")
 

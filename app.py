@@ -1,4 +1,4 @@
-# -------------------- Configurações --------------------
+# -------------------- app.py --------------------
 import streamlit as st
 import datetime
 import requests
@@ -11,6 +11,7 @@ from fpdf import FPDF
 from docx import Document
 import time
 
+# -------------------- Configurações --------------------
 st.set_page_config(page_title="Sistema Jurídico", layout="wide")
 load_dotenv()
 
@@ -56,8 +57,6 @@ def carregar_dados_da_planilha(tipo, debug=False):
     except Exception as e:
         st.warning(f"⚠️ Erro ao carregar dados ({tipo}): {e}")
         return []
-
-
 # -------------------- Funções do Sistema --------------------
 def login(usuario, senha):
     """Autentica usuário no sistema"""

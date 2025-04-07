@@ -30,18 +30,22 @@ USERS = {
 }
 
 # -------------------- Funções de Integração com Google Sheets --------------------
-def enviar_dados_para_planilha(tipo, dados):
+def carregar_dados_da_planilha(tipo):
     try:
-        payload = {"tipo": tipo, **dados}
-        response = requests.post(
-            GAS_WEB_APP_URL,
-            data=json.dumps(payload),
-            headers={'Content-Type': 'application/json'}
-        )
-        return response.text.strip() == "OK"
+        response = requests.get(GAS_WEB_APP_URL, params={"tipo": tipo})
+        st.text(f"Resposta bruta: {response.text[:300]}")  # debug no Streamlit
+        response.raise_for_status()
+
+        try:
+            dados = response.json()
+            return dados if isinstance(dados, list) else []
+        except json.JSONDecodeError as e:
+            st.error(f"Erro ao decodificar JSON da aba {tipo}: {e}")
+            return []
+
     except Exception as e:
-        st.error(f"Erro ao enviar dados: {e}")
-        return False
+        st.warning(f"Erro ao carregar dados ({tipo}): {e}")
+        return []
 
 
 def carregar_dados_da_planilha(tipo):

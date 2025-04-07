@@ -31,32 +31,46 @@ USERS = {
 
 # -------------------- Funções de Integração com Google Sheets --------------------
 def enviar_dados_para_planilha(tipo, dados):
+    """Envia dados para o Google Sheets via Apps Script"""
     try:
-        payload = {"tipo": tipo, **dados}
+        payload = {
+            "tipo": tipo,
+            **dados
+        }
+        
         response = requests.post(
             GAS_WEB_APP_URL,
             data=json.dumps(payload),
             headers={'Content-Type': 'application/json'}
         )
-        return response.text.strip() == "OK"
+        
+        if response.text.strip() == "OK":
+            return True
+        else:
+            st.error(f"Erro ao salvar: {response.text}")
+            return False
     except Exception as e:
-        st.error(f"❌ Erro ao enviar dados ({tipo}): {e}")
+        st.error(f"Falha na conexão com o Google Sheets: {str(e)}")
         return False
 
-def carregar_dados_da_planilha(tipo, debug=False):
+def carregar_dados_da_planilha(tipo):
+    """Carrega dados do Google Sheets via Apps Script"""
     try:
-        response = requests.get(GAS_WEB_APP_URL, params={"tipo": tipo})
-        response.raise_for_status()
-        if debug:
-            st.text(f"🔍 URL chamada: {response.url}")
-            st.text(f"📄 Resposta bruta: {response.text[:500]}")
-        return response.json()
-    except json.JSONDecodeError:
-        st.error(f"❌ Resposta inválida para o tipo '{tipo}'. O servidor não retornou JSON válido.")
-        return []
+        params = {'tipo': tipo}
+        response = requests.get(
+            GAS_WEB_APP_URL,
+            params=params
+        )
+        
+        if response.status_code == 200:
+            return []
+        else:
+            st.warning(f"Não foi possível carregar dados: {response.text}")
+            return []
     except Exception as e:
-        st.warning(f"⚠️ Erro ao carregar dados ({tipo}): {e}")
+        st.warning(f"Erro ao carregar dados: {str(e)}")
         return []
+
 # -------------------- Funções do Sistema --------------------
 def login(usuario, senha):
     """Autentica usuário no sistema"""

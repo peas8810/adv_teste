@@ -1,9 +1,13 @@
-# Estrutura inicial do sistema jurídico em Streamlit com funcionalidades solicitadas
-
-# -------------------- main.py --------------------
+# -------------------- app.py --------------------
 import streamlit as st
 import datetime
 import requests
+import openai
+from bs4 import BeautifulSoup
+
+# -------------------- Configurações externas --------------------
+openai.api_key = "SUA_CHAVE_OPENAI"
+GOOGLE_SHEETS_WEBHOOK = "https://script.google.com/macros/s/SEU_SCRIPT_ID/exec"
 
 # -------------------- Dados simulados --------------------
 USERS = {
@@ -15,19 +19,14 @@ USERS = {
 CLIENTES = []
 PROCESSOS = []
 
-# -------------------- Funções de Login --------------------
+# -------------------- Funções Auxiliares --------------------
 def login(usuario, senha):
     user = USERS.get(usuario)
     return user if user and user["senha"] == senha else None
 
-def get_user_role(usuario):
-    return USERS[usuario]["papel"]
-
-# -------------------- Função auxiliar para status --------------------
 def calcular_status_processo(data_prazo, houve_movimentacao):
     hoje = datetime.date.today()
     dias_restantes = (data_prazo - hoje).days
-
     if houve_movimentacao:
         return "🔵"
     elif dias_restantes < 0:
@@ -37,10 +36,37 @@ def calcular_status_processo(data_prazo, houve_movimentacao):
     else:
         return "🟢"
 
-# -------------------- Função principal --------------------
+def salvar_google_sheets(payload):
+    try:
+        response = requests.post(GOOGLE_SHEETS_WEBHOOK, json=payload)
+        if response.status_code == 200:
+            st.success("Dados enviados ao Google Sheets!")
+        else:
+            st.error("Erro ao salvar no Google Sheets.")
+    except Exception as e:
+        st.error(f"Erro na conexão com Google Sheets: {e}")
+
+def consultar_movimentacoes_simples(numero_processo):
+    url = f"https://esaj.tjsp.jus.br/cpopg/show.do?processo.codigo={numero_processo}"
+    r = requests.get(url)
+    soup = BeautifulSoup(r.text, "html.parser")
+    andamentos = soup.find_all("tr", class_="fundocinza1")
+    return [a.get_text(strip=True) for a in andamentos[:5]] if andamentos else ["Nenhuma movimentação encontrada"]
+
+def gerar_peticao_ia(prompt):
+    resposta = openai.ChatCompletion.create(
+        model="gpt-3.5-turbo",
+        messages=[
+            {"role": "system", "content": "Você é um advogado especialista em petições."},
+            {"role": "user", "content": prompt}
+        ]
+    )
+    return resposta.choices[0].message.content
+
+# -------------------- APP principal --------------------
 def main():
     st.set_page_config(page_title="Sistema Jurídico", layout="wide")
-    st.title("Sistema Jurídico com IA, API dos TJs e Controle Financeiro")
+    st.title("Sistema Jurídico com IA, Scraping e Google Sheets")
 
     with st.sidebar:
         st.header("Login")
@@ -58,7 +84,8 @@ def main():
     if "usuario" in st.session_state:
         papel = st.session_state.papel
         st.sidebar.success(f"Bem-vindo, {st.session_state.usuario} ({papel})")
-        opcoes = ["Dashboard", "Clientes", "Processos", "Petição IA"]
+
+        opcoes = ["Dashboard", "Clientes", "Processos", "Petições IA"]
         if papel == "owner":
             opcoes.append("Cadastrar Escritórios")
         elif papel == "manager":
@@ -67,30 +94,14 @@ def main():
         escolha = st.sidebar.selectbox("Menu", opcoes)
 
         if escolha == "Dashboard":
-            st.subheader("🎂 Avisos de Aniversário")
-            aniversarios = [
-                {"nome": "Ana Paula", "aniversario": "1990-04-05"},
-                {"nome": "Carlos Silva", "aniversario": "1985-12-25"},
-            ]
-            hoje = datetime.date.today()
-            for cliente in aniversarios:
-                nasc = datetime.datetime.strptime(cliente["aniversario"], "%Y-%m-%d").date()
-                if nasc.month == hoje.month and nasc.day == hoje.day:
-                    st.success(f"Hoje é aniversário de {cliente['nome']} 🎉")
-
             st.subheader("📋 Processos em Andamento")
             processos_visiveis = [p for p in PROCESSOS if papel == "owner" or
                                   (papel == "manager" and p["escritorio"] == st.session_state.dados_usuario["escritorio"]) or
                                   (papel == "lawyer" and p["escritorio"] == st.session_state.dados_usuario["escritorio"] and
                                    p["area"] == st.session_state.dados_usuario["area"])]
-            if processos_visiveis:
-                for proc in processos_visiveis:
-                    data_prazo = proc.get("prazo", datetime.date.today() + datetime.timedelta(days=30))
-                    movimentacao = proc.get("houve_movimentacao", False)
-                    status = calcular_status_processo(data_prazo, movimentacao)
-                    st.markdown(f"{status} **{proc['numero']}** - {proc['descricao']} (Cliente: {proc['cliente']})")
-            else:
-                st.info("Nenhum processo cadastrado.")
+            for proc in processos_visiveis:
+                status = calcular_status_processo(proc.get("prazo"), proc.get("houve_movimentacao", False))
+                st.markdown(f"{status} **{proc['numero']}** - {proc['descricao']} (Cliente: {proc['cliente']})")
 
         elif escolha == "Clientes":
             st.subheader("👥 Cadastro de Clientes")
@@ -99,13 +110,14 @@ def main():
             telefone = st.text_input("Telefone")
             aniversario = st.date_input("Data de Nascimento")
             if st.button("Salvar Cliente"):
-                CLIENTES.append({
+                cliente = {
                     "nome": nome,
                     "email": email,
                     "telefone": telefone,
                     "aniversario": aniversario.strftime("%Y-%m-%d")
-                })
-                st.success("Cliente cadastrado com sucesso!")
+                }
+                CLIENTES.append(cliente)
+                salvar_google_sheets({"tipo": "cliente", **cliente})
 
         elif escolha == "Processos":
             st.subheader("📄 Cadastro de Processo")
@@ -113,13 +125,13 @@ def main():
             numero_processo = st.text_input("Número do Processo")
             tipo_contrato = st.selectbox("Tipo de Contrato", ["Fixo", "Por Ato"])
             descricao = st.text_area("Descrição do Processo")
-            valor_total = st.number_input("Valor Total do Processo", min_value=0.0, format="%.2f")
+            valor_total = st.number_input("Valor Total", min_value=0.0, format="%.2f")
             valor_movimentado = st.number_input("Valor Movimentado", min_value=0.0, format="%.2f")
-            prazo = st.date_input("Prazo Final do Processo", value=datetime.date.today() + datetime.timedelta(days=30))
+            prazo = st.date_input("Prazo Final", value=datetime.date.today() + datetime.timedelta(days=30))
             houve_movimentacao = st.checkbox("Houve movimentação recente?")
-            area = st.selectbox("Área de Atuação", ["Cível", "Criminal", "Trabalhista", "Previdenciário"])
+            area = st.selectbox("Área", ["Cível", "Criminal", "Trabalhista", "Previdenciário"])
             if st.button("Salvar Processo"):
-                PROCESSOS.append({
+                processo = {
                     "cliente": cliente_nome,
                     "numero": numero_processo,
                     "tipo": tipo_contrato,
@@ -130,27 +142,29 @@ def main():
                     "houve_movimentacao": houve_movimentacao,
                     "escritorio": st.session_state.dados_usuario.get("escritorio", "Global"),
                     "area": area
-                })
-                st.success("Processo cadastrado com sucesso!")
+                }
+                PROCESSOS.append(processo)
+                salvar_google_sheets({"tipo": "processo", **processo})
 
-            st.subheader("🔍 Consultar Processo via API TJ")
-            processo = st.text_input("Número do Processo para Consulta")
-            tribunal = st.selectbox("Tribunal", ["TJMG", "TJSP", "TJBA", "TJRJ"])
-            if st.button("Consultar Andamentos"):
-                st.info(f"(Simulado) Buscando movimentações no {tribunal} para o processo {processo}...")
-                st.code("Andamento 1\nAndamento 2\nAndamento 3")
+            st.markdown("---")
+            st.subheader("🔎 Consultar Andamentos (Simulado)")
+            num_consulta = st.text_input("Nº do processo para consulta")
+            if st.button("Consultar TJSP"):
+                resultados = consultar_movimentacoes_simples(num_consulta)
+                for r in resultados:
+                    st.markdown(f"- {r}")
 
-        elif escolha == "Petição IA":
-            st.subheader("🤖 Gerar Petição com IA")
-            comando = st.text_area("Digite o comando para a petição")
+        elif escolha == "Petições IA":
+            st.subheader("🤖 Gerador de Petições com IA")
+            prompt = st.text_area("Descreva sua necessidade jurídica")
             if st.button("Gerar Petição"):
-                texto_peticao = f"Petição gerada com base no comando: {comando}"
-                st.text_area("Petição", texto_peticao, height=300)
+                resposta = gerar_peticao_ia(prompt)
+                st.text_area("Petição Gerada", resposta, height=300)
 
         elif escolha == "Cadastrar Escritórios":
             st.subheader("🏢 Cadastro de Escritórios")
             nome_esc = st.text_input("Nome do Escritório")
-            usuario_esc = st.text_input("Usuário do Escritório")
+            usuario_esc = st.text_input("Usuário")
             senha_esc = st.text_input("Senha")
             if st.button("Cadastrar Escritório"):
                 USERS[usuario_esc] = {"senha": senha_esc, "papel": "manager", "escritorio": nome_esc}
@@ -158,10 +172,10 @@ def main():
 
         elif escolha == "Cadastrar Funcionários":
             st.subheader("👩‍⚖️ Cadastro de Funcionários")
-            nome_func = st.text_input("Nome do Funcionário")
-            usuario_func = st.text_input("Usuário de Acesso")
+            nome_func = st.text_input("Nome")
+            usuario_func = st.text_input("Usuário")
             senha_func = st.text_input("Senha")
-            area_func = st.selectbox("Área de Atuação", ["Cível", "Criminal", "Trabalhista", "Previdenciário"])
+            area_func = st.selectbox("Área", ["Cível", "Criminal", "Trabalhista", "Previdenciário"])
             if st.button("Cadastrar Funcionário"):
                 USERS[usuario_func] = {
                     "senha": senha_func,

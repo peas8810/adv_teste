@@ -37,13 +37,13 @@ def enviar_dados_para_planilha(tipo, dados):
             "tipo": tipo,
             **dados
         }
-        
+
         response = requests.post(
             GAS_WEB_APP_URL,
             data=json.dumps(payload),
             headers={'Content-Type': 'application/json'}
         )
-        
+
         if response.text.strip() == "OK":
             return True
         else:
@@ -65,11 +65,11 @@ def carregar_dados_da_planilha(tipo, debug=False):
             st.text(f"📄 Resposta bruta: {response.text[:500]}")
 
         return response.json()
-    
+
     except json.JSONDecodeError:
         st.error(f"❌ Resposta inválida para o tipo '{tipo}'. O servidor não retornou JSON válido.")
         return []
-    
+
     except Exception as e:
         st.warning(f"⚠️ Erro ao carregar dados do tipo '{tipo}': {e}")
         return []

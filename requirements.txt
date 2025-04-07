@@ -1,5 +1,5 @@
 streamlit
-requests
-openai
-beautifulsoup4
+httpx
 python-dotenv
+beautifulsoup4
+requests

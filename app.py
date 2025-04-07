@@ -20,7 +20,7 @@ DEEPSEEK_API_KEY = "sk-4cd98d6c538f42f68bd820a6f3cc44c9"
 DEEPSEEK_ENDPOINT = "https://api.deepseek.com/v1/chat/completions"
 
 # Configuração do Google Apps Script
-GAS_WEB_APP_URL = "https://script.google.com/macros/s/AKfycbytp0BA1x2PnjcFhunbgWEoMxZmCobyZHNzq3Mxabr41RScNAH-nYIlBd-OySWv5dcx/exec"
+GAS_WEB_APP_URL = "https://script.google.com/macros/s/AKfycbzXp6IKpQfVhDXuBnTsVaMLJOszsPhPvkm5BWeaGsO54o_jnmXh3xxcS2Ica8FNCbXw/exec"
 
 # Dados do sistema
 USERS = {

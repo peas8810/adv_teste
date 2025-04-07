@@ -1,7 +1,7 @@
 streamlit
 requests
 beautifulsoup4
-httpx
 python-dotenv
+httpx
 fpdf
 python-docx

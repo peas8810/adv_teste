@@ -588,3 +588,21 @@ def main():
 
 if __name__ == '__main__':
     main()
+
+if st.sidebar.button("🔁 Testar Envio para Google Sheets"):
+    dados_teste = {
+        "nome": "Teste João",
+        "email": "joao@teste.com",
+        "telefone": "31999999999",
+        "aniversario": "1990-05-10",
+        "observacoes": "Teste automatizado",
+        "cadastro": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        "responsavel": "dono",
+        "escritorio": "Escritorio A"
+    }
+
+    sucesso = enviar_dados_para_planilha("Cliente", dados_teste)
+    if sucesso:
+        st.success("🟢 Dados de teste enviados com sucesso!")
+    else:
+        st.error("🔴 Falha ao enviar dados de teste.")

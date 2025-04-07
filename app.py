@@ -1,5 +1,9 @@
 # -------------------- app.py --------------------
 import streamlit as st
+
+# Configuração da página DEVE SER A PRIMEIRA CHAMADA
+st.set_page_config(page_title="Sistema Jurídico", layout="wide")
+
 import datetime
 import requests
 from bs4 import BeautifulSoup
@@ -10,10 +14,6 @@ import httpx
 from fpdf import FPDF
 from docx import Document
 import time
-
-# -------------------- Configurações --------------------
-st.set_page_config(page_title="Sistema Jurídico", layout="wide")
-load_dotenv()
 
 # Configuração da API DeepSeek
 DEEPSEEK_API_KEY = "sk-4cd98d6c538f42f68bd820a6f3cc44c9"

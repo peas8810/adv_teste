@@ -9,6 +9,11 @@ import os
 
 # -------------------- Configurações externas --------------------
 load_dotenv()
+if not os.getenv("OPENAI_API_KEY"):
+    st.warning("🚫 A chave da OpenAI não foi carregada. Verifique se está definida em Secrets ou .env")
+else:
+    st.success("✅ Chave da OpenAI carregada com sucesso!")
+
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 GOOGLE_SHEETS_WEBHOOK = "https://script.google.com/macros/s/AKfycbytp0BA1x2PnjcFhunbgWEoMxZmCobyZHNzq3Mxabr41RScNAH-nYIlBd-OySWv5dcx/exec"
 

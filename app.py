@@ -34,7 +34,6 @@ def carregar_dados_da_planilha(tipo):
     try:
         response = requests.get(GAS_WEB_APP_URL, params={"tipo": tipo})
         st.text(f"🔎 URL chamada: {response.url}")
-        st.text(f"📄 Resposta bruta: {response.text[:200]}")
         response.raise_for_status()
         return response.json()
     except Exception as e:

@@ -30,27 +30,49 @@ USERS = {
 }
 
 # -------------------- Funções de Integração com Google Sheets --------------------
-def carregar_dados_da_planilha(tipo):
+def enviar_dados_para_planilha(tipo, dados):
+    """Envia dados para o Google Sheets via Apps Script"""
+    try:
+        payload = {
+            "tipo": tipo,
+            **dados
+        }
+        
+        response = requests.post(
+            GAS_WEB_APP_URL,
+            data=json.dumps(payload),
+            headers={'Content-Type': 'application/json'}
+        )
+        
+        if response.text.strip() == "OK":
+            return True
+        else:
+            st.error(f"Erro ao salvar no Google Sheets: {response.text}")
+            return False
+    except Exception as e:
+        st.error(f"❌ Falha na conexão com o Google Sheets: {str(e)}")
+        return False
+
+
+def carregar_dados_da_planilha(tipo, debug=False):
+    """Carrega dados do Google Sheets via Apps Script"""
     try:
         response = requests.get(GAS_WEB_APP_URL, params={"tipo": tipo})
-        st.text(f"🔎 URL chamada: {response.url}")
         response.raise_for_status()
+
+        if debug:
+            st.text(f"🔍 URL chamada: {response.url}")
+            st.text(f"📄 Resposta bruta: {response.text[:500]}")
+
         return response.json()
-    except Exception as e:
-        st.warning(f"⚠️ Erro ao carregar dados ({tipo}): {e}")
+    
+    except json.JSONDecodeError:
+        st.error(f"❌ Resposta inválida para o tipo '{tipo}'. O servidor não retornou JSON válido.")
         return []
-
-
-
-def carregar_dados_da_planilha(tipo):
-    try:
-        response = requests.get(GAS_WEB_APP_URL, params={"tipo": tipo})
-        response.raise_for_status()
-        return response.json()
+    
     except Exception as e:
-        st.warning(f"Erro ao carregar dados ({tipo}): {e}")
+        st.warning(f"⚠️ Erro ao carregar dados do tipo '{tipo}': {e}")
         return []
-
 
 # -------------------- Funções do Sistema --------------------
 def login(usuario, senha):

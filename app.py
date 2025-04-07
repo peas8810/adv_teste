@@ -33,16 +33,10 @@ USERS = {
 def carregar_dados_da_planilha(tipo):
     try:
         response = requests.get(GAS_WEB_APP_URL, params={"tipo": tipo})
-        st.text(f"Resposta bruta: {response.text[:300]}")  # debug no Streamlit
+        st.text(f"URL chamada: {response.url}")
+        st.text(f"Resposta bruta: {response.text[:300]}")  # debug
         response.raise_for_status()
-
-        try:
-            dados = response.json()
-            return dados if isinstance(dados, list) else []
-        except json.JSONDecodeError as e:
-            st.error(f"Erro ao decodificar JSON da aba {tipo}: {e}")
-            return []
-
+        return response.json()
     except Exception as e:
         st.warning(f"Erro ao carregar dados ({tipo}): {e}")
         return []

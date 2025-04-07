@@ -10,6 +10,8 @@ import httpx
 from fpdf import FPDF
 from docx import Document
 import time
+import gspread
+from oauth2client.service_account import ServiceAccountCredentials
 
 # -------------------- Configurações --------------------
 st.set_page_config(page_title="Sistema Jurídico", layout="wide")
@@ -19,32 +21,84 @@ load_dotenv()
 DEEPSEEK_API_KEY = "sk-4cd98d6c538f42f68bd820a6f3cc44c9"
 DEEPSEEK_ENDPOINT = "https://api.deepseek.com/v1/chat/completions"
 
-# Dados do sistema (armazenamento local)
-DATA_FILE = "data.json"
+# Configuração do Google Sheets
+GOOGLE_SHEETS_CREDENTIALS = os.getenv("GOOGLE_SHEETS_CREDENTIALS")
+SPREADSHEET_NAME = "SistemaJuridico"
 
-# Carregar dados existentes ou inicializar
-def load_data():
-    try:
-        with open(DATA_FILE, "r") as f:
-            return json.load(f)
-    except (FileNotFoundError, json.JSONDecodeError):
-        return {
-            "clientes": [],
-            "processos": [],
-            "escritorios": [],
-            "historico_peticoes": []
-        }
+# Estrutura das planilhas no Google Sheets
+SHEETS_CONFIG = {
+    "Clientes": {
+        "columns": ["nome", "email", "telefone", "aniversario", "observacoes", "cadastro", "responsavel", "escritorio"]
+    },
+    "Processos": {
+        "columns": ["cliente", "numero", "tipo", "descricao", "valor_total", "valor_movimentado", 
+                   "prazo", "houve_movimentacao", "escritorio", "area", "responsavel", "data_cadastro"]
+    },
+    "Escritorios": {
+        "columns": ["nome", "endereco", "telefone", "email", "cnpj", "data_cadastro", "responsavel",
+                   "responsavel_tecnico", "telefone_tecnico", "email_tecnico", "area_atuacao"]
+    },
+    "Historico_Peticoes": {
+        "columns": ["tipo", "data", "responsavel", "conteudo", "escritorio", "cliente_associado"]
+    }
+}
 
-def save_data(data):
-    with open(DATA_FILE, "w") as f:
-        json.dump(data, f, indent=2)
-
-# Dados de usuários
+# Dados do sistema
+HISTORICO_PETICOES = []
 USERS = {
     "dono": {"senha": "dono123", "papel": "owner"},
     "gestor1": {"senha": "gestor123", "papel": "manager", "escritorio": "Escritorio A"},
     "adv1": {"senha": "adv123", "papel": "lawyer", "escritorio": "Escritorio A", "area": "Cível"},
 }
+
+# -------------------- Funções do Google Sheets --------------------
+def conectar_google_sheets():
+    """Conecta ao Google Sheets e retorna a planilha"""
+    try:
+        scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
+        creds = ServiceAccountCredentials.from_json_keyfile_dict(json.loads(GOOGLE_SHEETS_CREDENTIALS), scope)
+        client = gspread.authorize(creds)
+        spreadsheet = client.open(SPREADSHEET_NAME)
+        return spreadsheet
+    except Exception as e:
+        st.error(f"Erro ao conectar ao Google Sheets: {e}")
+        return None
+
+def salvar_dados(sheet_name, dados):
+    """Salva dados em uma aba específica da planilha"""
+    try:
+        spreadsheet = conectar_google_sheets()
+        if spreadsheet:
+            try:
+                worksheet = spreadsheet.worksheet(sheet_name)
+            except:
+                worksheet = spreadsheet.add_worksheet(title=sheet_name, rows="100", cols="20")
+                worksheet.append_row(SHEETS_CONFIG[sheet_name]["columns"])
+            
+            if isinstance(dados, dict):
+                # Converte o dicionário para lista na ordem das colunas
+                row_data = [dados.get(col, "") for col in SHEETS_CONFIG[sheet_name]["columns"]]
+                worksheet.append_row(row_data)
+            elif isinstance(dados, list):
+                # Para listas de dicionários
+                rows_data = [[item.get(col, "") for col in SHEETS_CONFIG[sheet_name]["columns"]] for item in dados]
+                worksheet.append_rows(rows_data)
+            
+            st.success(f"Dados salvos com sucesso na aba {sheet_name}!")
+    except Exception as e:
+        st.error(f"Erro ao salvar dados: {e}")
+
+def carregar_dados(sheet_name):
+    """Carrega dados de uma aba específica"""
+    try:
+        spreadsheet = conectar_google_sheets()
+        if spreadsheet:
+            worksheet = spreadsheet.worksheet(sheet_name)
+            records = worksheet.get_all_records()
+            return records
+    except Exception as e:
+        st.warning(f"Nenhum dado encontrado na aba {sheet_name} ou erro ao carregar: {e}")
+    return []
 
 # -------------------- Funções do Sistema --------------------
 def login(usuario, senha):
@@ -85,7 +139,7 @@ def gerar_peticao_ia(prompt, temperatura=0.7, max_tokens=2000, tentativas=3):
         "messages": [
             {
                 "role": "system",
-                "content": "Você é um assistente jurídico especializado. Responda com linguagem técnica formal."
+                "content": "Você é um assistente jurídico especializado em direito brasileiro. Responda com linguagem técnica formal, cite artigos de lei e jurisprudência relevante quando aplicável. Estruture a petição com: 1. Preâmbulo 2. Fatos 3. Fundamentação Jurídica 4. Pedido."
             },
             {
                 "role": "user",
@@ -93,14 +147,15 @@ def gerar_peticao_ia(prompt, temperatura=0.7, max_tokens=2000, tentativas=3):
             }
         ],
         "temperature": temperatura,
-        "max_tokens": max_tokens
+        "max_tokens": max_tokens,
+        "stream": False
     }
     
     for tentativa in range(tentativas):
         try:
             start_time = time.time()
             
-            with httpx.Client(timeout=25) as client:
+            with httpx.Client(timeout=30.0) as client:
                 response = client.post(
                     DEEPSEEK_ENDPOINT,
                     headers=headers,
@@ -119,11 +174,10 @@ def gerar_peticao_ia(prompt, temperatura=0.7, max_tokens=2000, tentativas=3):
             return resposta_json['choices'][0]['message']['content']
             
         except httpx.ReadTimeout:
-            if tentativa < tentativas - 1:
-                st.warning(f"Tentativa {tentativa + 1} falhou (timeout). Tentando novamente...")
-                continue
-            else:
-                raise Exception("O servidor demorou muito para responder após várias tentativas")
+            wait_time = (tentativa + 1) * 5  # Backoff exponencial
+            st.warning(f"Tentativa {tentativa + 1} falhou (timeout). Aguardando {wait_time}s...")
+            time.sleep(wait_time)
+            continue
                 
         except httpx.HTTPStatusError as e:
             error_msg = f"Erro HTTP {e.response.status_code}"
@@ -134,6 +188,7 @@ def gerar_peticao_ia(prompt, temperatura=0.7, max_tokens=2000, tentativas=3):
         except Exception as e:
             if tentativa == tentativas - 1:
                 raise Exception(f"Erro na requisição: {str(e)}")
+            time.sleep(3)
             continue
     
     return "❌ Falha ao gerar petição após múltiplas tentativas"
@@ -211,12 +266,11 @@ def aplicar_filtros(dados, filtros):
 def main():
     st.title("Sistema Jurídico com DeepSeek AI")
 
-    # Carrega dados do arquivo local
-    data = load_data()
-    CLIENTES = data["clientes"]
-    PROCESSOS = data["processos"]
-    ESCRITORIOS = data["escritorios"]
-    HISTORICO_PETICOES = data["historico_peticoes"]
+    # Carrega dados do Google Sheets
+    CLIENTES = carregar_dados("Clientes") or []
+    PROCESSOS = carregar_dados("Processos") or []
+    ESCRITORIOS = carregar_dados("Escritorios") or []
+    HISTORICO_PETICOES = carregar_dados("Historico_Peticoes") or []
 
     # Sidebar - Login
     with st.sidebar:
@@ -282,10 +336,11 @@ def main():
                 email = st.text_input("E-mail*")
                 telefone = st.text_input("Telefone*")
                 aniversario = st.date_input("Data de Nascimento")
+                escritorio = st.selectbox("Escritório*", [e["nome"] for e in ESCRITORIOS] + ["Outro"])
                 observacoes = st.text_area("Observações")
                 
                 if st.form_submit_button("Salvar Cliente"):
-                    if not nome or not email or not telefone:
+                    if not nome or not email or not telefone or not escritorio:
                         st.warning("Campos obrigatórios (*) não preenchidos!")
                     else:
                         novo_cliente = {
@@ -295,11 +350,11 @@ def main():
                             "aniversario": aniversario.strftime("%Y-%m-%d"),
                             "observacoes": observacoes,
                             "cadastro": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                            "responsavel": st.session_state.usuario
+                            "responsavel": st.session_state.usuario,
+                            "escritorio": escritorio
                         }
                         CLIENTES.append(novo_cliente)
-                        data["clientes"] = CLIENTES
-                        save_data(data)
+                        salvar_dados("Clientes", novo_cliente)
                         st.success("Cliente cadastrado com sucesso!")
 
         # Processos
@@ -341,8 +396,7 @@ def main():
                             "data_cadastro": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                         }
                         PROCESSOS.append(novo_processo)
-                        data["processos"] = PROCESSOS
-                        save_data(data)
+                        salvar_dados("Processos", novo_processo)
                         st.success("Processo cadastrado com sucesso!")
 
         # Gerenciar Escritórios
@@ -353,15 +407,27 @@ def main():
             
             with tab1:
                 with st.form("form_escritorio"):
+                    st.subheader("Dados Cadastrais")
                     nome = st.text_input("Nome do Escritório*")
                     endereco = st.text_input("Endereço Completo*")
                     telefone = st.text_input("Telefone*")
                     email = st.text_input("E-mail*")
-                    cnpj = st.text_input("CNPJ")
+                    cnpj = st.text_input("CNPJ*")
+                    
+                    st.subheader("Responsável Técnico")
+                    responsavel_tecnico = st.text_input("Nome do Responsável Técnico*")
+                    telefone_tecnico = st.text_input("Telefone do Responsável*")
+                    email_tecnico = st.text_input("E-mail do Responsável*")
+                    area_atuacao = st.multiselect("Áreas de Atuação", ["Cível", "Criminal", "Trabalhista", "Previdenciário", "Tributário"])
                     
                     if st.form_submit_button("Salvar Escritório"):
-                        if not nome or not endereco or not telefone or not email:
-                            st.warning("Campos obrigatórios (*) não preenchidos!")
+                        campos_obrigatorios = [
+                            nome, endereco, telefone, email, cnpj,
+                            responsavel_tecnico, telefone_tecnico, email_tecnico
+                        ]
+                        
+                        if not all(campos_obrigatorios):
+                            st.warning("Todos os campos obrigatórios (*) devem ser preenchidos!")
                         else:
                             novo_escritorio = {
                                 "nome": nome,
@@ -370,11 +436,14 @@ def main():
                                 "email": email,
                                 "cnpj": cnpj,
                                 "data_cadastro": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                                "responsavel": st.session_state.usuario
+                                "responsavel": st.session_state.usuario,
+                                "responsavel_tecnico": responsavel_tecnico,
+                                "telefone_tecnico": telefone_tecnico,
+                                "email_tecnico": email_tecnico,
+                                "area_atuacao": ", ".join(area_atuacao)
                             }
                             ESCRITORIOS.append(novo_escritorio)
-                            data["escritorios"] = ESCRITORIOS
-                            save_data(data)
+                            salvar_dados("Escritorios", novo_escritorio)
                             st.success("Escritório cadastrado com sucesso!")
             
             with tab2:
@@ -388,48 +457,63 @@ def main():
             st.subheader("🤖 Gerador de Petições com IA")
             
             with st.form("form_peticao"):
-                tipo_peticao = st.selectbox("Tipo de Petição", [
+                tipo_peticao = st.selectbox("Tipo de Petição*", [
                     "Inicial Cível",
                     "Resposta",
                     "Recurso",
                     "Memorial",
-                    "Contestação"
+                    "Contestação",
+                    "Ação Declaratória",
+                    "Ação de Execução",
+                    "Ação Possessória"
                 ])
                 
-                contexto = st.text_area("Descreva o caso*", help="Forneça detalhes sobre o caso, partes envolvidas, documentos relevantes etc.")
-                estilo = st.selectbox("Estilo de Redação", ["Objetivo", "Persuasivo", "Técnico", "Detalhado"])
-                parametros = st.slider("Criatividade", 0.1, 1.0, 0.7)
+                cliente_associado = st.selectbox("Cliente Associado", [c["nome"] for c in CLIENTES] + ["Nenhum"])
+                contexto = st.text_area("Descreva o caso*", 
+                                      help="Forneça detalhes sobre o caso, partes envolvidas, documentos relevantes, artigos de lei aplicáveis etc.")
+                
+                col1, col2 = st.columns(2)
+                with col1:
+                    estilo = st.selectbox("Estilo de Redação*", ["Objetivo", "Persuasivo", "Técnico", "Detalhado"])
+                with col2:
+                    parametros = st.slider("Nível de Detalhe", 0.1, 1.0, 0.7)
                 
                 if st.form_submit_button("Gerar Petição"):
-                    if not contexto:
-                        st.warning("Por favor, descreva o caso!")
+                    if not contexto or not tipo_peticao:
+                        st.warning("Campos obrigatórios (*) não preenchidos!")
                     else:
                         prompt = f"""
-                        Gere uma petição do tipo {tipo_peticao} com o seguinte contexto:
+                        Gere uma petição jurídica do tipo {tipo_peticao} com os seguintes detalhes:
+
+                        **Contexto do Caso:**
                         {contexto}
-                        
-                        Requisitos:
+
+                        **Requisitos:**
                         - Estilo: {estilo}
-                        - Linguagem jurídica formal
-                        - Estruturada corretamente
-                        - Cite jurisprudência relevante quando aplicável
+                        - Linguagem jurídica formal brasileira
+                        - Estruturada com: 1. Preâmbulo 2. Fatos 3. Fundamentação Jurídica 4. Pedido
+                        - Cite artigos de lei e jurisprudência quando aplicável
+                        - Inclua fecho padrão (Nestes termos, pede deferimento)
+                        - Limite de {int(2000*parametros)} tokens
                         """
                         
                         try:
-                            with st.spinner("Gerando petição com IA..."):
+                            with st.spinner("Gerando petição com IA (pode levar alguns minutos)..."):
                                 resposta = gerar_peticao_ia(prompt, temperatura=parametros)
                                 st.session_state.ultima_peticao = resposta
                                 st.session_state.prompt_usado = prompt
                                 
                                 # Salva no histórico
-                                HISTORICO_PETICOES.append({
+                                nova_peticao = {
                                     "tipo": tipo_peticao,
                                     "data": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                                     "responsavel": st.session_state.usuario,
-                                    "conteudo": resposta[:500] + "..." if len(resposta) > 500 else resposta
-                                })
-                                data["historico_peticoes"] = HISTORICO_PETICOES
-                                save_data(data)
+                                    "conteudo": resposta[:1000] + "..." if len(resposta) > 1000 else resposta,
+                                    "escritorio": st.session_state.dados_usuario.get("escritorio", "Global"),
+                                    "cliente_associado": cliente_associado if cliente_associado != "Nenhum" else ""
+                                }
+                                HISTORICO_PETICOES.append(nova_peticao)
+                                salvar_dados("Historico_Peticoes", nova_peticao)
                             
                             st.success("Petição gerada com sucesso!")
                             st.text_area("Petição Gerada", value=resposta, height=400)
@@ -440,12 +524,12 @@ def main():
                                 if st.button("Exportar para PDF"):
                                     arquivo = exportar_pdf(resposta)
                                     with open(arquivo, "rb") as f:
-                                        st.download_button("Baixar PDF", f, file_name=arquivo)
+                                        st.download_button("Baixar PDF", f, file_name=f"peticao_{datetime.datetime.now().strftime('%Y%m%d')}.pdf")
                             with col2:
                                 if st.button("Exportar para DOCX"):
                                     arquivo = exportar_docx(resposta)
                                     with open(arquivo, "rb") as f:
-                                        st.download_button("Baixar DOCX", f, file_name=arquivo)
+                                        st.download_button("Baixar DOCX", f, file_name=f"peticao_{datetime.datetime.now().strftime('%Y%m%d')}.docx")
                             
                         except Exception as e:
                             st.error(f"Erro ao gerar petição: {str(e)}")
@@ -456,9 +540,10 @@ def main():
             
             if HISTORICO_PETICOES:
                 for item in reversed(HISTORICO_PETICOES):
-                    with st.expander(f"{item['tipo']} - {item['data']}"):
+                    with st.expander(f"{item['tipo']} - {item['data']} - {item['cliente_associado'] or 'Sem cliente associado'}"):
                         st.write(f"**Responsável:** {item['responsavel']}")
-                        st.text_area("Conteúdo", value=item['conteudo'], key=item['data'], disabled=True)
+                        st.write(f"**Escritório:** {item['escritorio']}")
+                        st.text_area("Conteúdo", value=item['conteudo'], key=item['data'], disabled=True, height=200)
             else:
                 st.info("Nenhuma petição gerada ainda")
 
@@ -515,7 +600,7 @@ def main():
                 if st.button("Gerar Relatório PDF"):
                     arquivo = gerar_relatorio_pdf(st.session_state.processos_filtrados)
                     with open(arquivo, "rb") as f:
-                        st.download_button("Baixar Relatório", f, file_name=arquivo)
+                        st.download_button("Baixar Relatório", f, file_name=f"relatorio_{datetime.datetime.now().strftime('%Y%m%d')}.pdf")
                 
                 st.dataframe(st.session_state.processos_filtrados)
             else:

@@ -47,12 +47,13 @@ def enviar_dados_para_planilha(tipo, dados):
 def carregar_dados_da_planilha(tipo):
     try:
         response = requests.get(GAS_WEB_APP_URL, params={"tipo": tipo})
-        if response.status_code == 200:
-            return response.json()
-        return []
+        st.text(f"Resposta bruta: {response.text[:300]}")  # mostra no Streamlit
+        response.raise_for_status()
+        return response.json()
     except Exception as e:
-        st.warning(f"Erro ao carregar dados: {e}")
+        st.warning(f"Erro ao carregar dados ({tipo}): {e}")
         return []
+
 
 # -------------------- Funções do Sistema --------------------
 def login(usuario, senha):

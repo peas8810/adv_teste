@@ -138,7 +138,7 @@ def main():
                     "descricao": descricao,
                     "valor_total": valor_total,
                     "valor_movimentado": valor_movimentado,
-                    "prazo": prazo,
+                    "prazo": prazo.strftime("%Y-%m-%d"),
                     "houve_movimentacao": houve_movimentacao,
                     "escritorio": st.session_state.dados_usuario.get("escritorio", "Global"),
                     "area": area

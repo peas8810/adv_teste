@@ -63,8 +63,6 @@ def carregar_dados_da_planilha(tipo):
         )
         
         if response.status_code == 200:
-            # Seu script atual não implementa doGet para retornar dados
-            # Esta é uma implementação básica - você precisará adaptar seu GAS
             return []
         else:
             st.warning(f"Não foi possível carregar dados: {response.text}")
@@ -165,7 +163,74 @@ def gerar_peticao_ia(prompt, temperatura=0.7, max_tokens=2000, tentativas=3):
     
     return "❌ Falha ao gerar petição após múltiplas tentativas"
 
-# ... (mantenha as funções exportar_pdf, exportar_docx, gerar_relatorio_pdf e aplicar_filtros como estavam) ...
+def exportar_pdf(texto, nome_arquivo="peticao"):
+    """Exporta texto para PDF"""
+    pdf = FPDF()
+    pdf.add_page()
+    pdf.set_font("Arial", size=12)
+    pdf.multi_cell(0, 10, texto)
+    pdf.output(f"{nome_arquivo}.pdf")
+    return f"{nome_arquivo}.pdf"
+
+def exportar_docx(texto, nome_arquivo="peticao"):
+    """Exporta texto para DOCX"""
+    doc = Document()
+    doc.add_paragraph(texto)
+    doc.save(f"{nome_arquivo}.docx")
+    return f"{nome_arquivo}.docx"
+
+def gerar_relatorio_pdf(dados, nome_arquivo="relatorio"):
+    """Gera relatório em PDF com tabela de dados"""
+    pdf = FPDF()
+    pdf.add_page()
+    pdf.set_font("Arial", size=12)
+    
+    # Título
+    pdf.cell(200, 10, txt="Relatório de Processos", ln=1, align='C')
+    pdf.ln(10)
+    
+    # Cabeçalho da tabela
+    col_widths = [40, 30, 50, 30, 40]
+    headers = ["Cliente", "Número", "Área", "Status", "Responsável"]
+    
+    for i, header in enumerate(headers):
+        pdf.cell(col_widths[i], 10, txt=header, border=1)
+    pdf.ln()
+    
+    # Linhas da tabela
+    for processo in dados:
+        prazo = datetime.date.fromisoformat(processo.get("prazo", datetime.date.today().isoformat()))
+        status = calcular_status_processo(prazo, processo.get("houve_movimentacao", False))
+        
+        cols = [
+            processo["cliente"],
+            processo["numero"],
+            processo["area"],
+            status,
+            processo["responsavel"]
+        ]
+        
+        for i, col in enumerate(cols):
+            pdf.cell(col_widths[i], 10, txt=str(col), border=1)
+        pdf.ln()
+    
+    pdf.output(f"{nome_arquivo}.pdf")
+    return f"{nome_arquivo}.pdf"
+
+def aplicar_filtros(dados, filtros):
+    """Aplica filtros aos dados"""
+    resultados = dados.copy()
+    
+    for campo, valor in filtros.items():
+        if valor:
+            if campo == "data_inicio":
+                resultados = [r for r in resultados if datetime.date.fromisoformat(r["data_cadastro"][:10]) >= valor]
+            elif campo == "data_fim":
+                resultados = [r for r in resultados if datetime.date.fromisoformat(r["data_cadastro"][:10]) <= valor]
+            else:
+                resultados = [r for r in resultados if str(valor).lower() in str(r.get(campo, "")).lower()]
+    
+    return resultados
 
 # -------------------- Interface Principal --------------------
 def main():
@@ -357,97 +422,97 @@ def main():
                 else:
                     st.info("Nenhum escritório cadastrado ainda")
 
-       # Petições IA
-                elif escolha == "Petições IA":
-                    st.subheader("🤖 Gerador de Petições com IA")
-                    
-                    # Formulário principal
-                    with st.form("form_peticao"):
-                        tipo_peticao = st.selectbox("Tipo de Petição*", [
-                            "Inicial Cível",
-                            "Resposta",
-                            "Recurso",
-                            "Memorial",
-                            "Contestação"
-                        ])
-                        
-                        cliente_associado = st.selectbox("Cliente Associado", [c["nome"] for c in CLIENTES] + ["Nenhum"])
-                        contexto = st.text_area("Descreva o caso*", 
-                                              help="Forneça detalhes sobre o caso, partes envolvidas, documentos relevantes etc.")
-                        
-                        col1, col2 = st.columns(2)
-                        with col1:
-                            estilo = st.selectbox("Estilo de Redação*", ["Objetivo", "Persuasivo", "Técnico", "Detalhado"])
-                        with col2:
-                            parametros = st.slider("Nível de Detalhe", 0.1, 1.0, 0.7)
-                        
-                        submitted = st.form_submit_button("Gerar Petição")
-                    
-                    # Seção de resultados (fora do formulário)
-                    if submitted:
-                        if not contexto or not tipo_peticao:
-                            st.warning("Campos obrigatórios (*) não preenchidos!")
-                        else:
-                            prompt = f"""
-                            Gere uma petição jurídica do tipo {tipo_peticao} com os seguintes detalhes:
+        # Petições IA
+        elif escolha == "Petições IA":
+            st.subheader("🤖 Gerador de Petições com IA")
+            
+            # Formulário principal
+            with st.form("form_peticao"):
+                tipo_peticao = st.selectbox("Tipo de Petição*", [
+                    "Inicial Cível",
+                    "Resposta",
+                    "Recurso",
+                    "Memorial",
+                    "Contestação"
+                ])
                 
-                            **Contexto do Caso:**
-                            {contexto}
+                cliente_associado = st.selectbox("Cliente Associado", [c["nome"] for c in CLIENTES] + ["Nenhum"])
+                contexto = st.text_area("Descreva o caso*", 
+                                      help="Forneça detalhes sobre o caso, partes envolvidas, documentos relevantes etc.")
                 
-                            **Requisitos:**
-                            - Estilo: {estilo}
-                            - Linguagem jurídica formal brasileira
-                            - Estruturada com: 1. Preâmbulo 2. Fatos 3. Fundamentação Jurídica 4. Pedido
-                            - Cite artigos de lei e jurisprudência quando aplicável
-                            - Inclua fecho padrão (Nestes termos, pede deferimento)
-                            - Limite de {int(2000*parametros)} tokens
-                            """
+                col1, col2 = st.columns(2)
+                with col1:
+                    estilo = st.selectbox("Estilo de Redação*", ["Objetivo", "Persuasivo", "Técnico", "Detalhado"])
+                with col2:
+                    parametros = st.slider("Nível de Detalhe", 0.1, 1.0, 0.7)
+                
+                submitted = st.form_submit_button("Gerar Petição")
+            
+            # Seção de resultados (fora do formulário)
+            if submitted:
+                if not contexto or not tipo_peticao:
+                    st.warning("Campos obrigatórios (*) não preenchidos!")
+                else:
+                    prompt = f"""
+                    Gere uma petição jurídica do tipo {tipo_peticao} com os seguintes detalhes:
+
+                    **Contexto do Caso:**
+                    {contexto}
+
+                    **Requisitos:**
+                    - Estilo: {estilo}
+                    - Linguagem jurídica formal brasileira
+                    - Estruturada com: 1. Preâmbulo 2. Fatos 3. Fundamentação Jurídica 4. Pedido
+                    - Cite artigos de lei e jurisprudência quando aplicável
+                    - Inclua fecho padrão (Nestes termos, pede deferimento)
+                    - Limite de {int(2000*parametros)} tokens
+                    """
+                    
+                    try:
+                        with st.spinner("Gerando petição com IA (pode levar alguns minutos)..."):
+                            resposta = gerar_peticao_ia(prompt, temperatura=parametros)
+                            st.session_state.ultima_peticao = resposta
+                            st.session_state.prompt_usado = prompt
                             
-                            try:
-                                with st.spinner("Gerando petição com IA (pode levar alguns minutos)..."):
-                                    resposta = gerar_peticao_ia(prompt, temperatura=parametros)
-                                    st.session_state.ultima_peticao = resposta
-                                    st.session_state.prompt_usado = prompt
-                                    
-                                    # Salva no histórico
-                                    nova_peticao = {
-                                        "tipo": tipo_peticao,
-                                        "data": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                                        "responsavel": st.session_state.usuario,
-                                        "conteudo": resposta[:1000] + "..." if len(resposta) > 1000 else resposta,
-                                        "escritorio": st.session_state.dados_usuario.get("escritorio", "Global"),
-                                        "cliente_associado": cliente_associado if cliente_associado != "Nenhum" else ""
-                                    }
-                                    HISTORICO_PETICOES.append(nova_peticao)
-                                    salvar_dados("Historico_Peticoes", nova_peticao)
-                                
-                                st.success("Petição gerada com sucesso!")
-                                st.text_area("Petição Gerada", value=resposta, height=400, key="peticao_gerada")
-                                
-                            except Exception as e:
-                                st.error(f"Erro ao gerar petição: {str(e)}")
-                    
-                    # Botões de exportação (fora do formulário e condicional à existência de petição)
-                    if 'ultima_peticao' in st.session_state:
-                        col1, col2 = st.columns(2)
-                        with col1:
-                            pdf_file = exportar_pdf(st.session_state.ultima_peticao)
-                            with open(pdf_file, "rb") as f:
-                                st.download_button(
-                                    "Exportar para PDF",
-                                    f,
-                                    file_name=f"peticao_{datetime.datetime.now().strftime('%Y%m%d')}.pdf",
-                                    key="download_pdf"
-                                )
-                        with col2:
-                            docx_file = exportar_docx(st.session_state.ultima_peticao)
-                            with open(docx_file, "rb") as f:
-                                st.download_button(
-                                    "Exportar para DOCX",
-                                    f,
-                                    file_name=f"peticao_{datetime.datetime.now().strftime('%Y%m%d')}.docx",
-                                    key="download_docx"
-                                )
+                            # Salva no histórico
+                            nova_peticao = {
+                                "tipo": tipo_peticao,
+                                "data": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                                "responsavel": st.session_state.usuario,
+                                "conteudo": resposta[:1000] + "..." if len(resposta) > 1000 else resposta,
+                                "escritorio": st.session_state.dados_usuario.get("escritorio", "Global"),
+                                "cliente_associado": cliente_associado if cliente_associado != "Nenhum" else ""
+                            }
+                            if enviar_dados_para_planilha("Historico_Peticao", nova_peticao):
+                                HISTORICO_PETICOES.append(nova_peticao)
+                                st.success("Petição gerada e salva com sucesso!")
+                        
+                        st.text_area("Petição Gerada", value=resposta, height=400, key="peticao_gerada")
+                        
+                    except Exception as e:
+                        st.error(f"Erro ao gerar petição: {str(e)}")
+            
+            # Botões de exportação (fora do formulário e condicional à existência de petição)
+            if 'ultima_peticao' in st.session_state:
+                col1, col2 = st.columns(2)
+                with col1:
+                    pdf_file = exportar_pdf(st.session_state.ultima_peticao)
+                    with open(pdf_file, "rb") as f:
+                        st.download_button(
+                            "Exportar para PDF",
+                            f,
+                            file_name=f"peticao_{datetime.datetime.now().strftime('%Y%m%d')}.pdf",
+                            key="download_pdf"
+                        )
+                with col2:
+                    docx_file = exportar_docx(st.session_state.ultima_peticao)
+                    with open(docx_file, "rb") as f:
+                        st.download_button(
+                            "Exportar para DOCX",
+                            f,
+                            file_name=f"peticao_{datetime.datetime.now().strftime('%Y%m%d')}.docx",
+                            key="download_docx"
+                        )
 
         # Histórico
         elif escolha == "Histórico":

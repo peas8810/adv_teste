@@ -6,7 +6,7 @@ from openai import OpenAI
 from bs4 import BeautifulSoup
 
 # -------------------- Configurações externas --------------------
-client = OpenAI(api_key="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")
+client = OpenAI(api_key="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")
 GOOGLE_SHEETS_WEBHOOK = "https://script.google.com/macros/s/AKfycbytp0BA1x2PnjcFhunbgWEoMxZmCobyZHNzq3Mxabr41RScNAH-nYIlBd-OySWv5dcx/exec"
 
 # -------------------- Dados simulados --------------------

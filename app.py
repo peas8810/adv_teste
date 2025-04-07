@@ -213,8 +213,32 @@ def main():
 
         escolha = st.sidebar.selectbox("Menu", opcoes)
 
-        # Dashboard (mantido igual)
-        # Clientes (ajustado para salvar no Google Sheets)
+        # Dashboard
+        if escolha == "Dashboard":
+            st.subheader("📋 Processos em Andamento")
+            processos_visiveis = [p for p in PROCESSOS if papel == "owner" or
+                                (papel == "manager" and p["escritorio"] == st.session_state.dados_usuario["escritorio"]) or
+                                (papel == "lawyer" and p["escritorio"] == st.session_state.dados_usuario["escritorio"] and
+                                p["area"] == st.session_state.dados_usuario["area"])]
+            
+            if processos_visiveis:
+                for proc in processos_visiveis:
+                    prazo_default = (datetime.date.today() + datetime.timedelta(days=30)).strftime("%Y-%m-%d") 
+                    data_prazo_str = proc.get("prazo", prazo_default)
+                    data_prazo = datetime.date.fromisoformat(data_prazo_str)
+                    movimentacao = proc.get("houve_movimentacao", False)
+                    status = calcular_status_processo(data_prazo, movimentacao)
+                    
+                    with st.expander(f"{status} Processo: {proc['numero']}"):
+                        st.write(f"**Cliente:** {proc['cliente']}")
+                        st.write(f"**Descrição:** {proc['descricao']}")
+                        st.write(f"**Área:** {proc['area']}")
+                        st.write(f"**Prazo:** {data_prazo.strftime('%d/%m/%Y')}")
+                        st.write(f"**Valor:** R$ {proc['valor_total']:,.2f}")
+            else:
+                st.info("Nenhum processo cadastrado.")
+
+        # Clientes
         elif escolha == "Clientes":
             st.subheader("👥 Cadastro de Clientes")
             
@@ -242,7 +266,7 @@ def main():
                         salvar_dados("Clientes", novo_cliente)
                         st.success("Cliente cadastrado com sucesso!")
 
-        # Processos (ajustado para salvar no Google Sheets)
+        # Processos
         elif escolha == "Processos":
             st.subheader("📄 Gestão de Processos")
             
@@ -284,7 +308,7 @@ def main():
                         salvar_dados("Processos", novo_processo)
                         st.success("Processo cadastrado com sucesso!")
 
-        # Nova seção para Gerenciar Escritórios
+        # Gerenciar Escritórios
         elif escolha == "Gerenciar Escritórios" and papel == "owner":
             st.subheader("🏢 Gerenciar Escritórios")
             

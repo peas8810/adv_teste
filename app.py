@@ -16,11 +16,11 @@ st.set_page_config(page_title="Sistema Jurídico", layout="wide")
 load_dotenv()
 
 # Configuração da API DeepSeek
-DEEPSEEK_API_KEY = "sk-4cd98d6c538f42f68bd820a6f3cc44c9"
+DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY")
 DEEPSEEK_ENDPOINT = "https://api.deepseek.com/v1/chat/completions"
 
 # Configuração do Google Apps Script
-GAS_WEB_APP_URL = "https://script.google.com/macros/s/AKfycbytp0BA1x2PnjcFhunbgWEoMxZmCobyZHNzq3Mxabr41RScNAH-nYIlBd-OySWv5dcx/exec"
+GAS_WEB_APP_URL = os.getenv("GAS_WEB_APP_URL")
 
 # Dados do sistema
 USERS = {
@@ -266,7 +266,7 @@ def main():
         # Menu principal
         opcoes = ["Dashboard", "Clientes", "Processos", "Petições IA", "Histórico", "Relatórios"]
         if papel == "owner":
-            opcoes.extend(["Cadastrar Escritórios", "Gerenciar Escritórios"])
+            opcoes.extend(["Gerenciar Escritórios"])
         elif papel == "manager":
             opcoes.append("Cadastrar Funcionários")
 
@@ -369,56 +369,148 @@ def main():
                             PROCESSOS.append(novo_processo)
                             st.success("Processo cadastrado com sucesso!")
 
-        # Gerenciar Escritórios
+        # Gerenciar Escritórios - VERSÃO COMPLETA
         elif escolha == "Gerenciar Escritórios" and papel == "owner":
             st.subheader("🏢 Gerenciar Escritórios")
             
             tab1, tab2 = st.tabs(["Cadastrar Escritório", "Lista de Escritórios"])
             
             with tab1:
-                with st.form("form_escritorio"):
-                    st.subheader("Dados Cadastrais")
-                    nome = st.text_input("Nome do Escritório*")
-                    endereco = st.text_input("Endereço Completo*")
-                    telefone = st.text_input("Telefone*")
-                    email = st.text_input("E-mail*")
-                    cnpj = st.text_input("CNPJ*")
-                    
-                    st.subheader("Responsável Técnico")
-                    responsavel_tecnico = st.text_input("Nome do Responsável Técnico*")
-                    telefone_tecnico = st.text_input("Telefone do Responsável*")
-                    email_tecnico = st.text_input("E-mail do Responsável*")
-                    area_atuacao = st.multiselect("Áreas de Atuação", ["Cível", "Criminal", "Trabalhista", "Previdenciário", "Tributário"])
-                    
-                    if st.form_submit_button("Salvar Escritório"):
-                        campos_obrigatorios = [
-                            nome, endereco, telefone, email, cnpj,
-                            responsavel_tecnico, telefone_tecnico, email_tecnico
-                        ]
+                with st.form("form_escritorio", clear_on_submit=True):
+                    st.subheader("Informações Básicas")
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        nome = st.text_input("Nome do Escritório*")
+                        cnpj = st.text_input("CNPJ*", help="00.000.000/0000-00")
+                        telefone = st.text_input("Telefone Principal*", help="(00) 0000-0000")
+                        email = st.text_input("E-mail Institucional*")
                         
-                        if not all(campos_obrigatorios):
-                            st.warning("Todos os campos obrigatórios (*) devem ser preenchidos!")
+                    with col2:
+                        data_fundacao = st.date_input("Data de Fundação")
+                        num_funcionarios = st.number_input("Número de Funcionários", min_value=1, value=1)
+                        area_principal = st.selectbox("Área de Atuação Principal*", 
+                                                    ["Cível", "Criminal", "Trabalhista", "Previdenciário", "Tributário"])
+                    
+                    st.subheader("Endereço Completo")
+                    col1, col2, col3 = st.columns([3, 1, 1])
+                    with col1:
+                        endereco = st.text_input("Logradouro*", placeholder="Rua/Av. Nome, Número")
+                    with col2:
+                        cep = st.text_input("CEP*", placeholder="00000-000")
+                    with col3:
+                        estado = st.selectbox("UF*", ["AC","AL","AP","AM","BA","CE","DF","ES","GO","MA","MT","MS","MG",
+                                                    "PA","PB","PR","PE","PI","RJ","RN","RS","RO","RR","SC","SP","SE","TO"])
+                    
+                    cidade = st.text_input("Cidade*")
+                    complemento = st.text_input("Complemento")
+                    
+                    st.subheader("Responsáveis")
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        responsavel_legal = st.text_input("Responsável Legal*")
+                        email_legal = st.text_input("E-mail do Responsável Legal*")
+                    with col2:
+                        responsavel_tecnico = st.text_input("Responsável Técnico*")
+                        email_tecnico = st.text_input("E-mail do Responsável Técnico*")
+                    
+                    st.subheader("Informações Adicionais")
+                    areas_atuacao = st.multiselect("Áreas de Atuação", 
+                                                ["Cível", "Criminal", "Trabalhista", "Previdenciário", "Tributário",
+                                                "Empresarial", "Ambiental", "Digital", "Internacional"])
+                    observacoes = st.text_area("Observações")
+                    
+                    if st.form_submit_button("Cadastrar Escritório"):
+                        campos_obrigatorios = {
+                            "Nome": nome,
+                            "CNPJ": cnpj,
+                            "Telefone": telefone,
+                            "E-mail": email,
+                            "Logradouro": endereco,
+                            "CEP": cep,
+                            "UF": estado,
+                            "Cidade": cidade,
+                            "Responsável Legal": responsavel_legal,
+                            "E-mail Legal": email_legal,
+                            "Responsável Técnico": responsavel_tecnico,
+                            "E-mail Técnico": email_tecnico,
+                            "Área Principal": area_principal
+                        }
+                        
+                        faltantes = [campo for campo, valor in campos_obrigatorios.items() if not valor]
+                        
+                        if faltantes:
+                            st.error(f"Campos obrigatórios faltando: {', '.join(faltantes)}")
                         else:
                             novo_escritorio = {
                                 "nome": nome,
-                                "endereco": endereco,
+                                "cnpj": cnpj,
                                 "telefone": telefone,
                                 "email": email,
-                                "cnpj": cnpj,
+                                "data_fundacao": data_fundacao.strftime("%Y-%m-%d") if data_fundacao else "",
+                                "num_funcionarios": num_funcionarios,
+                                "area_principal": area_principal,
+                                "endereco": {
+                                    "logradouro": endereco,
+                                    "cep": cep,
+                                    "cidade": cidade,
+                                    "estado": estado,
+                                    "complemento": complemento
+                                },
+                                "responsaveis": {
+                                    "legal": responsavel_legal,
+                                    "email_legal": email_legal,
+                                    "tecnico": responsavel_tecnico,
+                                    "email_tecnico": email_tecnico
+                                },
+                                "areas_atuacao": areas_atuacao,
+                                "observacoes": observacoes,
                                 "data_cadastro": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                                "responsavel": st.session_state.usuario,
-                                "responsavel_tecnico": responsavel_tecnico,
-                                "telefone_tecnico": telefone_tecnico,
-                                "email_tecnico": email_tecnico,
-                                "area_atuacao": ", ".join(area_atuacao)
+                                "cadastrado_por": st.session_state.usuario
                             }
+                            
                             if enviar_dados_para_planilha("Escritorio", novo_escritorio):
                                 ESCRITORIOS.append(novo_escritorio)
                                 st.success("Escritório cadastrado com sucesso!")
+                                st.balloons()
             
             with tab2:
                 if ESCRITORIOS:
-                    st.dataframe(ESCRITORIOS)
+                    st.subheader("Escritórios Cadastrados")
+                    
+                    # Filtros
+                    with st.expander("Filtrar Escritórios"):
+                        col1, col2 = st.columns(2)
+                        with col1:
+                            filtro_estado = st.selectbox("Estado", ["Todos"] + sorted(list(set(e.get("endereco", {}).get("estado", "") for e in ESCRITORIOS))))
+                        with col2:
+                            filtro_area = st.selectbox("Área Principal", ["Todas"] + sorted(list(set(e.get("area_principal", "") for e in ESCRITORIOS))))
+                    
+                    # Aplicar filtros
+                    escritorios_filtrados = ESCRITORIOS
+                    if filtro_estado != "Todos":
+                        escritorios_filtrados = [e for e in escritorios_filtrados if e.get("endereco", {}).get("estado", "") == filtro_estado]
+                    if filtro_area != "Todas":
+                        escritorios_filtrados = [e for e in escritorios_filtrados if e.get("area_principal", "") == filtro_area]
+                    
+                    # Mostrar resultados
+                    for escritorio in escritorios_filtrados:
+                        with st.expander(f"{escritorio['nome']} - {escritorio.get('area_principal', '')}"):
+                            col1, col2 = st.columns(2)
+                            with col1:
+                                st.write(f"**CNPJ:** {escritorio['cnpj']}")
+                                st.write(f"**Telefone:** {escritorio['telefone']}")
+                                st.write(f"**E-mail:** {escritorio['email']}")
+                                st.write(f"**Funcionários:** {escritorio.get('num_funcionarios', '')}")
+                                
+                            with col2:
+                                endereco = escritorio.get("endereco", {})
+                                st.write(f"**Endereço:** {endereco.get('logradouro', '')}")
+                                st.write(f"**CEP:** {endereco.get('cep', '')}")
+                                st.write(f"**Cidade/UF:** {endereco.get('cidade', '')}/{endereco.get('estado', '')}")
+                                st.write(f"**Complemento:** {endereco.get('complemento', '')}")
+                            
+                            st.write(f"**Áreas de Atuação:** {', '.join(escritorio.get('areas_atuacao', []))}")
+                            st.write(f"**Cadastrado em:** {escritorio.get('data_cadastro', '')} por {escritorio.get('cadastrado_por', '')}")
                 else:
                     st.info("Nenhum escritório cadastrado ainda")
 
@@ -448,7 +540,7 @@ def main():
                 
                 submitted = st.form_submit_button("Gerar Petição")
             
-            # Seção de resultados (fora do formulário)
+            # Seção de resultados
             if submitted:
                 if not contexto or not tipo_peticao:
                     st.warning("Campos obrigatórios (*) não preenchidos!")
@@ -492,7 +584,7 @@ def main():
                     except Exception as e:
                         st.error(f"Erro ao gerar petição: {str(e)}")
             
-            # Botões de exportação (fora do formulário e condicional à existência de petição)
+            # Botões de exportação
             if 'ultima_peticao' in st.session_state:
                 col1, col2 = st.columns(2)
                 with col1:

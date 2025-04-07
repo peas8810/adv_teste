@@ -97,6 +97,23 @@ def exportar_docx(texto):
     doc.save(docx_path)
     return docx_path
 
+def aplicar_filtros(dados, campos):
+    filtrados = dados
+    for campo in campos:
+        if campo in dados[0]:
+            if "data" in campo.lower():
+                col1, col2 = st.columns(2)
+                with col1:
+                    data_inicio = st.date_input(f"Data inicial de {campo}", value=datetime.date(2000, 1, 1))
+                with col2:
+                    data_fim = st.date_input(f"Data final de {campo}", value=datetime.date.today())
+                filtrados = [d for d in filtrados if campo in d and data_inicio <= datetime.date.fromisoformat(d[campo]) <= data_fim]
+            else:
+                valor = st.text_input(f"Filtrar por {campo.capitalize()} (deixe em branco para ignorar)")
+                if valor:
+                    filtrados = [d for d in filtrados if str(d.get(campo, '')).lower() == valor.lower()]
+    return filtrados
+
 def main():
     st.title("Sistema Jurídico com IA, Scraping e Google Sheets")
 
@@ -117,7 +134,7 @@ def main():
         papel = st.session_state.papel
         st.sidebar.success(f"Bem-vindo, {st.session_state.usuario} ({papel})")
 
-        opcoes = ["Dashboard", "Clientes", "Processos", "Petições IA", "Histórico de Petições"]
+        opcoes = ["Dashboard", "Clientes", "Processos", "Petições IA", "Histórico de Petições", "Relatórios"]
         if papel == "owner":
             opcoes.append("Cadastrar Escritórios")
         elif papel == "manager":
@@ -125,117 +142,39 @@ def main():
 
         escolha = st.sidebar.selectbox("Menu", opcoes)
 
-        if escolha == "Dashboard":
-            st.subheader("📋 Processos em Andamento")
-            processos_visiveis = [p for p in PROCESSOS if papel == "owner" or
-                                  (papel == "manager" and p["escritorio"] == st.session_state.dados_usuario["escritorio"]) or
-                                  (papel == "lawyer" and p["escritorio"] == st.session_state.dados_usuario["escritorio"] and
-                                   p["area"] == st.session_state.dados_usuario["area"])]
-            for proc in processos_visiveis:
-                status = calcular_status_processo(proc.get("prazo"), proc.get("houve_movimentacao", False))
-                st.markdown(f"{status} **{proc['numero']}** - {proc['descricao']} (Cliente: {proc['cliente']})")
+        if escolha == "Relatórios":
+            st.subheader("📊 Emissão de Relatórios")
+            tipo_relatorio = st.selectbox("Escolha o tipo de dado para emitir relatório", ["Clientes", "Processos", "Petições"])
+            dados = []
+            if tipo_relatorio == "Clientes":
+                dados = CLIENTES
+            elif tipo_relatorio == "Processos":
+                dados = PROCESSOS
+            elif tipo_relatorio == "Petições":
+                dados = HISTORICO_PETICOES
 
-        elif escolha == "Clientes":
-            st.subheader("👥 Cadastro de Clientes")
-            nome = st.text_input("Nome do Cliente")
-            email = st.text_input("Email")
-            telefone = st.text_input("Telefone")
-            aniversario = st.date_input("Data de Nascimento")
-            if st.button("Salvar Cliente"):
-                cliente = {
-                    "nome": nome,
-                    "email": email,
-                    "telefone": telefone,
-                    "aniversio": aniversario.strftime("%Y-%m-%d")
-                }
-                CLIENTES.append(cliente)
-                salvar_google_sheets({"tipo": "cliente", **cliente})
+            if dados:
+                st.markdown("### 🔍 Filtros")
+                campos = list(dados[0].keys())
+                dados = aplicar_filtros(dados, campos)
 
-        elif escolha == "Processos":
-            st.subheader("📄 Cadastro de Processo")
-            cliente_nome = st.text_input("Nome do Cliente Vinculado")
-            numero_processo = st.text_input("Número do Processo")
-            tipo_contrato = st.selectbox("Tipo de Contrato", ["Fixo", "Por Ato"])
-            descricao = st.text_area("Descrição do Processo")
-            valor_total = st.number_input("Valor Total", min_value=0.0, format="%.2f")
-            valor_movimentado = st.number_input("Valor Movimentado", min_value=0.0, format="%.2f")
-            prazo = st.date_input("Prazo Final", value=datetime.date.today() + datetime.timedelta(days=30))
-            houve_movimentacao = st.checkbox("Houve movimentação recente?")
-            area = st.selectbox("Área", ["Cível", "Criminal", "Trabalhista", "Previdenciário"])
-            if st.button("Salvar Processo"):
-                processo = {
-                    "cliente": cliente_nome,
-                    "numero": numero_processo,
-                    "tipo_contrato": tipo_contrato,
-                    "descricao": descricao,
-                    "valor_total": valor_total,
-                    "valor_movimentado": valor_movimentado,
-                    "prazo": prazo.strftime("%Y-%m-%d"),
-                    "houve_movimentacao": houve_movimentacao,
-                    "escritorio": st.session_state.dados_usuario.get("escritorio", "Global"),
-                    "area": area
-                }
-                PROCESSOS.append(processo)
-                salvar_google_sheets({"tipo": "processo", **processo})
+            for item in dados:
+                st.json(item)
 
-            st.markdown("---")
-            st.subheader("🔎 Consultar Andamentos (Simulado)")
-            num_consulta = st.text_input("Nº do processo para consulta")
-            if st.button("Consultar TJSP"):
-                resultados = consultar_movimentacoes_simples(num_consulta)
-                for r in resultados:
-                    st.markdown(f"- {r}")
+            if dados:
+                if st.button("Exportar para PDF"):
+                    texto = "\n\n".join([json.dumps(d, indent=2, ensure_ascii=False) for d in dados])
+                    caminho = exportar_pdf(texto)
+                    st.success("Relatório exportado em PDF")
+                    with open(caminho, "rb") as file:
+                        st.download_button("📄 Baixar PDF", file, file_name=caminho)
 
-        elif escolha == "Petições IA":
-            st.subheader("🤖 Gerador de Petições com IA")
-            prompt = st.text_area("Descreva sua necessidade jurídica")
-            cliente_ref = st.text_input("Cliente Vinculado")
-            if st.button("Gerar Petição"):
-                resposta = gerar_peticao_ia(prompt)
-                st.text_area("Petição Gerada", resposta, height=300)
-                HISTORICO_PETICOES.append({"cliente": cliente_ref, "texto": resposta})
-
-                col1, col2 = st.columns(2)
-                with col1:
-                    pdf_path = exportar_pdf(resposta)
-                    with open(pdf_path, "rb") as file:
-                        st.download_button("📥 Baixar PDF", data=file, file_name="peticao.pdf", mime="application/pdf")
-                with col2:
-                    docx_path = exportar_docx(resposta)
-                    with open(docx_path, "rb") as file:
-                        st.download_button("📥 Baixar DOCX", data=file, file_name="peticao.docx", mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document")
-
-        elif escolha == "Histórico de Petições":
-            st.subheader("📜 Histórico de Petições")
-            cliente_filtro = st.text_input("Filtrar por cliente")
-            for pet in HISTORICO_PETICOES:
-                if not cliente_filtro or cliente_filtro.lower() in pet["cliente"].lower():
-                    st.markdown(f"**Cliente:** {pet['cliente']}")
-                    st.text_area("Petição", pet['texto'], height=150)
-
-        elif escolha == "Cadastrar Escritórios":
-            st.subheader("🏢 Cadastro de Escritórios")
-            nome_esc = st.text_input("Nome do Escritório")
-            usuario_esc = st.text_input("Usuário")
-            senha_esc = st.text_input("Senha")
-            if st.button("Cadastrar Escritório"):
-                USERS[usuario_esc] = {"senha": senha_esc, "papel": "manager", "escritorio": nome_esc}
-                st.success("Escritório cadastrado com sucesso!")
-
-        elif escolha == "Cadastrar Funcionários":
-            st.subheader("👩‍⚖️ Cadastro de Funcionários")
-            nome_func = st.text_input("Nome")
-            usuario_func = st.text_input("Usuário")
-            senha_func = st.text_input("Senha")
-            area_func = st.selectbox("Área", ["Cível", "Criminal", "Trabalhista", "Previdenciário"])
-            if st.button("Cadastrar Funcionário"):
-                USERS[usuario_func] = {
-                    "senha": senha_func,
-                    "papel": "lawyer",
-                    "escritorio": st.session_state.dados_usuario["escritorio"],
-                    "area": area_func
-                }
-                st.success("Funcionário cadastrado com sucesso!")
+                if st.button("Exportar para DOCX"):
+                    texto = "\n\n".join([json.dumps(d, indent=2, ensure_ascii=False) for d in dados])
+                    caminho = exportar_docx(texto)
+                    st.success("Relatório exportado em DOCX")
+                    with open(caminho, "rb") as file:
+                        st.download_button("📄 Baixar DOCX", file, file_name=caminho)
 
 if __name__ == '__main__':
     main()

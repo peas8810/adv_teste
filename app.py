@@ -79,6 +79,24 @@ def gerar_peticao_ia(prompt):
     except Exception as e:
         return f"❌ Erro ao gerar petição: {e}"
 
+def exportar_pdf(texto):
+    pdf = FPDF()
+    pdf.add_page()
+    pdf.set_font("Arial", size=12)
+    for linha in texto.split("\n"):
+        pdf.multi_cell(0, 10, linha)
+    pdf_path = "peticao_gerada.pdf"
+    pdf.output(pdf_path)
+    return pdf_path
+
+def exportar_docx(texto):
+    doc = Document()
+    for linha in texto.split("\n"):
+        doc.add_paragraph(linha)
+    docx_path = "peticao_gerada.docx"
+    doc.save(docx_path)
+    return docx_path
+
 def main():
     st.title("Sistema Jurídico com IA, Scraping e Google Sheets")
 
@@ -99,7 +117,7 @@ def main():
         papel = st.session_state.papel
         st.sidebar.success(f"Bem-vindo, {st.session_state.usuario} ({papel})")
 
-        opcoes = ["Dashboard", "Clientes", "Processos", "Petições IA"]
+        opcoes = ["Dashboard", "Clientes", "Processos", "Petições IA", "Histórico de Petições"]
         if papel == "owner":
             opcoes.append("Cadastrar Escritórios")
         elif papel == "manager":
@@ -171,9 +189,29 @@ def main():
         elif escolha == "Petições IA":
             st.subheader("🤖 Gerador de Petições com IA")
             prompt = st.text_area("Descreva sua necessidade jurídica")
+            cliente_ref = st.text_input("Cliente Vinculado")
             if st.button("Gerar Petição"):
                 resposta = gerar_peticao_ia(prompt)
                 st.text_area("Petição Gerada", resposta, height=300)
+                HISTORICO_PETICOES.append({"cliente": cliente_ref, "texto": resposta})
+
+                col1, col2 = st.columns(2)
+                with col1:
+                    pdf_path = exportar_pdf(resposta)
+                    with open(pdf_path, "rb") as file:
+                        st.download_button("📥 Baixar PDF", data=file, file_name="peticao.pdf", mime="application/pdf")
+                with col2:
+                    docx_path = exportar_docx(resposta)
+                    with open(docx_path, "rb") as file:
+                        st.download_button("📥 Baixar DOCX", data=file, file_name="peticao.docx", mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document")
+
+        elif escolha == "Histórico de Petições":
+            st.subheader("📜 Histórico de Petições")
+            cliente_filtro = st.text_input("Filtrar por cliente")
+            for pet in HISTORICO_PETICOES:
+                if not cliente_filtro or cliente_filtro.lower() in pet["cliente"].lower():
+                    st.markdown(f"**Cliente:** {pet['cliente']}")
+                    st.text_area("Petição", pet['texto'], height=150)
 
         elif escolha == "Cadastrar Escritórios":
             st.subheader("🏢 Cadastro de Escritórios")

@@ -7,7 +7,7 @@ from bs4 import BeautifulSoup
 
 # -------------------- Configurações externas --------------------
 openai.api_key = "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"
-GOOGLE_SHEETS_WEBHOOK = "https://script.google.com/macros/s/SEU_SCRIPT_ID/exec"
+GOOGLE_SHEETS_WEBHOOK = "https://script.google.com/macros/s/AKfycbytp0BA1x2PnjcFhunbgWEoMxZmCobyZHNzq3Mxabr41RScNAH-nYIlBd-OySWv5dcx/exec"
 
 # -------------------- Dados simulados --------------------
 USERS = {

@@ -8,6 +8,7 @@ from dotenv import load_dotenv
 import os
 
 # -------------------- Configurações externas --------------------
+st.set_page_config(page_title="Sistema Jurídico", layout="wide")
 load_dotenv()
 if not os.getenv("OPENAI_API_KEY"):
     st.warning("🚫 A chave da OpenAI não foi carregada. Verifique se está definida em Secrets ou .env")
@@ -73,7 +74,6 @@ def gerar_peticao_ia(prompt):
 
 # -------------------- APP principal --------------------
 def main():
-    st.set_page_config(page_title="Sistema Jurídico", layout="wide")
     st.title("Sistema Jurídico com IA, Scraping e Google Sheets")
 
     with st.sidebar:

@@ -153,19 +153,21 @@ def main():
 
         escolha = st.sidebar.selectbox("Menu", opcoes)
 
-        if escolha == "Dashboard":
-            st.subheader("📋 Processos em Andamento")
-            processos_visiveis = [p for p in PROCESSOS if papel == "owner" or
-                                  (papel == "manager" and p["escritorio"] == st.session_state.dados_usuario["escritorio"]) or
-                                  (papel == "lawyer" and p["escritorio"] == st.session_state.dados_usuario["escritorio"] and
-                                   p["area"] == st.session_state.dados_usuario["area"])]
-            if processos_visiveis:
-                for proc in processos_visiveis:
-                    data_prazo = datetime.date.fromisoformat(proc.get("prazo", (datetime.date.today() + datetime.timedelta(days=30)).strftime("%Y-%m-%d"))
-                    movimentacao = proc.get("houve_movimentacao", False)
-                    status = calcular_status_processo(data_prazo, movimentacao)
-                    st.markdown(f"{status} **{proc['numero']}** - {proc['descricao']} (Cliente: {proc['cliente']})")
-            else:
+       if escolha == "Dashboard":
+    st.subheader("📋 Processos em Andamento")
+    processos_visiveis = [p for p in PROCESSOS if papel == "owner" or
+                          (papel == "manager" and p["escritorio"] == st.session_state.dados_usuario["escritorio"]) or
+                          (papel == "lawyer" and p["escritorio"] == st.session_state.dados_usuario["escritorio"] and
+                           p["area"] == st.session_state.dados_usuario["area"])]
+    if processos_visiveis:
+        for proc in processos_visiveis:
+            prazo_default = (datetime.date.today() + datetime.timedelta(days=30)).strftime("%Y-%m-%d")
+            data_prazo_str = proc.get("prazo", prazo_default)
+            data_prazo = datetime.date.fromisoformat(data_prazo_str)
+            movimentacao = proc.get("houve_movimentacao", False)
+            status = calcular_status_processo(data_prazo, movimentacao)
+            st.markdown(f"{status} **{proc['numero']}** - {proc['descricao']} (Cliente: {proc['cliente']})")
+    else:
                 st.info("Nenhum processo cadastrado.")
 
         elif escolha == "Clientes":

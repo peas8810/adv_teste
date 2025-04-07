@@ -33,17 +33,20 @@ USERS = {
 def enviar_dados_para_planilha(tipo, dados):
     """Envia dados para o Google Sheets via Apps Script"""
     try:
+        # Remove o campo "tipo" se ele existir nos dados (para evitar sobrescrever o tipo da aba)
+        dados_sem_tipo = {k: v for k, v in dados.items() if k.lower() != "tipo"}
+
         payload = {
-            "tipo": tipo,
-            **dados
+            "tipo": tipo,  # isso é o nome da aba no Google Sheets
+            **dados_sem_tipo
         }
-        
+
         response = requests.post(
             GAS_WEB_APP_URL,
             data=json.dumps(payload),
             headers={'Content-Type': 'application/json'}
         )
-        
+
         if response.text.strip() == "OK":
             return True
         else:
@@ -52,6 +55,7 @@ def enviar_dados_para_planilha(tipo, dados):
     except Exception as e:
         st.error(f"Falha na conexão com o Google Sheets: {str(e)}")
         return False
+
 
 def carregar_dados_da_planilha(tipo):
     """Carrega dados do Google Sheets via Apps Script"""

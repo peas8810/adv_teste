@@ -7,6 +7,8 @@ from dotenv import load_dotenv
 import os
 import json
 import httpx
+from fpdf import FPDF
+from docx import Document
 
 # -------------------- Configurações externas --------------------
 st.set_page_config(page_title="Sistema Jurídico", layout="wide")
@@ -15,70 +17,9 @@ load_dotenv()
 DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY", "sk-b6021a65e36340b999b3e6817e064d50")
 DEEPSEEK_ENDPOINT = "https://api.deepseek.com/v1/chat/completions"
 
-def gerar_peticao_ia(prompt):
-    headers = {
-        "Content-Type": "application/json",
-        "Authorization": f"Bearer {DEEPSEEK_API_KEY}"
-    }
-    payload = {
-        "model": "deepseek-chat",
-        "messages": [
-            {"role": "system", "content": "Você é um advogado especialista em petições."},
-            {"role": "user", "content": prompt}
-        ]
-    }
-    try:
-        response = httpx.post(DEEPSEEK_ENDPOINT, headers=headers, json=payload)
-        resposta_json = response.json()
-        return resposta_json['choices'][0]['message']['content']
-    except Exception as e:
-        return f"❌ Erro ao gerar petição: {e}"
+HISTORICO_PETICOES = []
 
-GOOGLE_SHEETS_WEBHOOK = "https://script.google.com/macros/s/AKfycbytp0BA1x2PnjcFhunbgWEoMxZmCobyZHNzq3Mxabr41RScNAH-nYIlBd-OySWv5dcx/exec"
-
-# -------------------- Dados simulados --------------------
-USERS = {
-    "dono": {"senha": "dono123", "papel": "owner"},
-    "gestor1": {"senha": "gestor123", "papel": "manager", "escritorio": "Escritorio A"},
-    "adv1": {"senha": "adv123", "papel": "lawyer", "escritorio": "Escritorio A", "area": "Cível"},
-}
-
-CLIENTES = []
-PROCESSOS = []
-
-# -------------------- Funções Auxiliares --------------------
-def login(usuario, senha):
-    user = USERS.get(usuario)
-    return user if user and user["senha"] == senha else None
-
-def calcular_status_processo(data_prazo, houve_movimentacao):
-    hoje = datetime.date.today()
-    dias_restantes = (data_prazo - hoje).days
-    if houve_movimentacao:
-        return "🔵"
-    elif dias_restantes < 0:
-        return "🔴"
-    elif dias_restantes <= 10:
-        return "🟡"
-    else:
-        return "🟢"
-
-def salvar_google_sheets(payload):
-    try:
-        response = requests.post(GOOGLE_SHEETS_WEBHOOK, json=payload)
-        if response.status_code == 200:
-            st.success("Dados enviados ao Google Sheets!")
-        else:
-            st.error("Erro ao salvar no Google Sheets.")
-    except Exception as e:
-        st.error(f"Erro na conexão com Google Sheets: {e}")
-
-def consultar_movimentacoes_simples(numero_processo):
-    url = f"https://esaj.tjsp.jus.br/cpopg/show.do?processo.codigo={numero_processo}"
-    r = requests.get(url)
-    soup = BeautifulSoup(r.text, "html.parser")
-    andamentos = soup.find_all("tr", class_="fundocinza1")
-    return [a.get_text(strip=True) for a in andamentos[:5]] if andamentos else ["Nenhuma movimentação encontrada"]
+# ... (restante do código permanece igual até o final do arquivo atual)
 
 # -------------------- APP principal --------------------
 def main():
@@ -101,7 +42,7 @@ def main():
         papel = st.session_state.papel
         st.sidebar.success(f"Bem-vindo, {st.session_state.usuario} ({papel})")
 
-        opcoes = ["Dashboard", "Clientes", "Processos", "Petições IA"]
+        opcoes = ["Dashboard", "Clientes", "Processos", "Petições IA", "Histórico de Petições"]
         if papel == "owner":
             opcoes.append("Cadastrar Escritórios")
         elif papel == "manager":
@@ -171,11 +112,17 @@ def main():
                     st.markdown(f"- {r}")
 
         elif escolha == "Petições IA":
-            st.subheader("🤖 Gerador de Petições com IA")
-            prompt = st.text_area("Descreva sua necessidade jurídica")
-            if st.button("Gerar Petição"):
-                resposta = gerar_peticao_ia(prompt)
-                st.text_area("Petição Gerada", resposta, height=300)
+            exibir_peticoes_ia()
+
+        elif escolha == "Histórico de Petições":
+            st.subheader("📚 Histórico de Petições")
+            if HISTORICO_PETICOES:
+                for pet in reversed(HISTORICO_PETICOES):
+                    with st.expander(f"{pet['data']} - {pet['cliente']}"):
+                        st.markdown(f"**Prompt:** {pet['prompt']}")
+                        st.text_area("Conteúdo da Petição", pet['conteudo'], height=200)
+            else:
+                st.info("Nenhuma petição gerada ainda.")
 
         elif escolha == "Cadastrar Escritórios":
             st.subheader("🏢 Cadastro de Escritórios")

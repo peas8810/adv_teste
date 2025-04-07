@@ -2,11 +2,11 @@
 import streamlit as st
 import datetime
 import requests
-import openai
+from openai import OpenAI
 from bs4 import BeautifulSoup
 
 # -------------------- Configurações externas --------------------
-openai.api_key = "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"
+client = OpenAI(api_key="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")
 GOOGLE_SHEETS_WEBHOOK = "https://script.google.com/macros/s/AKfycbytp0BA1x2PnjcFhunbgWEoMxZmCobyZHNzq3Mxabr41RScNAH-nYIlBd-OySWv5dcx/exec"
 
 # -------------------- Dados simulados --------------------
@@ -54,7 +54,7 @@ def consultar_movimentacoes_simples(numero_processo):
     return [a.get_text(strip=True) for a in andamentos[:5]] if andamentos else ["Nenhuma movimentação encontrada"]
 
 def gerar_peticao_ia(prompt):
-    resposta = openai.ChatCompletion.create(
+    resposta = client.chat.completions.create(
         model="gpt-3.5-turbo",
         messages=[
             {"role": "system", "content": "Você é um advogado especialista em petições."},

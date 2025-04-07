@@ -222,58 +222,58 @@ def main():
                 for r in resultados:
                     st.markdown(f"- {r}")
 
-  elif escolha == "Petições IA":
-    st.subheader("🤖 Gerador de Petições com IA")
-    
-    # Adicionar seleção de modelo/template
-    tipo_peticao = st.selectbox(
-        "Tipo de Petição",
-        ["Geral", "Inicial Cível", "Resposta", "Recurso", "Outros"],
-        help="Selecione o tipo de petição para orientar a IA"
-    )
-    
-    # Área de texto com placeholder explicativo
-    prompt = st.text_area(
-        "Descreva sua necessidade jurídica",
-        placeholder="Ex: 'Preciso de uma petição inicial de indenização por danos morais contra uma empresa de telecomunicações...'",
-        height=150
-    )
-    
-    # Adicionar configurações avançadas
-    with st.expander("Configurações Avançadas"):
-        col1, col2 = st.columns(2)
-        with col1:
-            temperatura = st.slider("Criatividade", 0.1, 1.0, 0.7, help="Valores mais altos = mais criativo, valores mais baixos = mais previsível")
-        with col2:
-            max_tokens = st.number_input("Tamanho máximo", min_value=100, max_value=4000, value=2000, step=100)
-    
-    if st.button("Gerar Petição", type="primary"):
-        if not prompt.strip():
-            st.warning("Por favor, descreva sua necessidade jurídica")
-            st.stop()
-            
-        with st.spinner("Gerando petição com IA..."):
-            try:
-                # Modificar o prompt com base no tipo selecionado
-                prompt_final = f"Tipo: {tipo_peticao}\n\n{prompt}" if tipo_peticao != "Geral" else prompt
+              elif escolha == "Petições IA":
+                st.subheader("🤖 Gerador de Petições com IA")
                 
-                resposta = gerar_peticao_ia(prompt_final)
+                # Adicionar seleção de modelo/template
+                tipo_peticao = st.selectbox(
+                    "Tipo de Petição",
+                    ["Geral", "Inicial Cível", "Resposta", "Recurso", "Outros"],
+                    help="Selecione o tipo de petição para orientar a IA"
+                )
                 
-                if resposta.startswith("❌ Erro"):
-                    st.error(resposta)
-                else:
-                    # Exibir a petição gerada
-                    st.subheader("📝 Petição Gerada")
-                    st.text_area("", resposta, height=300, key="peticao_gerada")
-                    
-                    # Adicionar ao histórico
-                    HISTORICO_PETICOES.append({
-                        "usuario": st.session_state.usuario,
-                        "data": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                        "tipo": tipo_peticao,
-                        "prompt": prompt,
-                        "resposta": resposta
-                    })
+                # Área de texto com placeholder explicativo
+                prompt = st.text_area(
+                    "Descreva sua necessidade jurídica",
+                    placeholder="Ex: 'Preciso de uma petição inicial de indenização por danos morais contra uma empresa de telecomunicações...'",
+                    height=150
+                )
+                
+                # Adicionar configurações avançadas
+                with st.expander("Configurações Avançadas"):
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        temperatura = st.slider("Criatividade", 0.1, 1.0, 0.7, help="Valores mais altos = mais criativo, valores mais baixos = mais previsível")
+                    with col2:
+                        max_tokens = st.number_input("Tamanho máximo", min_value=100, max_value=4000, value=2000, step=100)
+                
+                if st.button("Gerar Petição", type="primary"):
+                    if not prompt.strip():
+                        st.warning("Por favor, descreva sua necessidade jurídica")
+                        st.stop()
+                        
+                    with st.spinner("Gerando petição com IA..."):
+                        try:
+                            # Modificar o prompt com base no tipo selecionado
+                            prompt_final = f"Tipo: {tipo_peticao}\n\n{prompt}" if tipo_peticao != "Geral" else prompt
+                            
+                            resposta = gerar_peticao_ia(prompt_final)
+                            
+                            if resposta.startswith("❌ Erro"):
+                                st.error(resposta)
+                            else:
+                                # Exibir a petição gerada
+                                st.subheader("📝 Petição Gerada")
+                                st.text_area("", resposta, height=300, key="peticao_gerada")
+                                
+                                # Adicionar ao histórico
+                                HISTORICO_PETICOES.append({
+                                    "usuario": st.session_state.usuario,
+                                    "data": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                                    "tipo": tipo_peticao,
+                                    "prompt": prompt,
+                                    "resposta": resposta
+                                })
                     
                     # Opções de exportação
                     st.subheader("💾 Exportar Petição")

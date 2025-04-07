@@ -1,9 +1,5 @@
 # -------------------- app.py --------------------
-import streamlit as st
-
-# Configuração da página DEVE SER A PRIMEIRA CHAMADA
-st.set_page_config(page_title="Sistema Jurídico", layout="wide")
-
+# 1. TODAS AS IMPORTAÇÕES PRIMEIRO
 import datetime
 import requests
 from bs4 import BeautifulSoup
@@ -13,6 +9,11 @@ import json
 import httpx
 from fpdf import FPDF
 from docx import Document
+import time
+
+# 2. IMPORTAÇÃO DO STREAMLIT E CONFIGURAÇÃO DA PÁGINA (DEVE VIR ANTES DE QUALQUER OUTRO COMANDO STREAMLIT)
+import streamlit as st
+st.set_page_config(page_title="Sistema Jurídico", layout="wide")
 import time
 
 # Configuração da API DeepSeek

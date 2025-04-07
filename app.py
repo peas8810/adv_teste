@@ -2,20 +2,38 @@
 import streamlit as st
 import datetime
 import requests
-from openai import OpenAI
 from bs4 import BeautifulSoup
 from dotenv import load_dotenv
 import os
+import json
+import httpx
 
 # -------------------- Configurações externas --------------------
 st.set_page_config(page_title="Sistema Jurídico", layout="wide")
 load_dotenv()
-if not os.getenv("OPENAI_API_KEY"):
-    st.warning("🚫 A chave da OpenAI não foi carregada. Verifique se está definida em Secrets ou .env")
-else:
-    st.success("✅ Chave da OpenAI carregada com sucesso!")
 
-client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY", "sk-b6021a65e36340b999b3e6817e064d50")
+DEEPSEEK_ENDPOINT = "https://api.deepseek.com/v1/chat/completions"
+
+def gerar_peticao_ia(prompt):
+    headers = {
+        "Content-Type": "application/json",
+        "Authorization": f"Bearer {DEEPSEEK_API_KEY}"
+    }
+    payload = {
+        "model": "deepseek-chat",
+        "messages": [
+            {"role": "system", "content": "Você é um advogado especialista em petições."},
+            {"role": "user", "content": prompt}
+        ]
+    }
+    try:
+        response = httpx.post(DEEPSEEK_ENDPOINT, headers=headers, json=payload)
+        resposta_json = response.json()
+        return resposta_json['choices'][0]['message']['content']
+    except Exception as e:
+        return f"❌ Erro ao gerar petição: {e}"
+
 GOOGLE_SHEETS_WEBHOOK = "https://script.google.com/macros/s/AKfycbytp0BA1x2PnjcFhunbgWEoMxZmCobyZHNzq3Mxabr41RScNAH-nYIlBd-OySWv5dcx/exec"
 
 # -------------------- Dados simulados --------------------
@@ -61,16 +79,6 @@ def consultar_movimentacoes_simples(numero_processo):
     soup = BeautifulSoup(r.text, "html.parser")
     andamentos = soup.find_all("tr", class_="fundocinza1")
     return [a.get_text(strip=True) for a in andamentos[:5]] if andamentos else ["Nenhuma movimentação encontrada"]
-
-def gerar_peticao_ia(prompt):
-    resposta = client.chat.completions.create(
-        model="gpt-3.5-turbo",
-        messages=[
-            {"role": "system", "content": "Você é um advogado especialista em petições."},
-            {"role": "user", "content": prompt}
-        ]
-    )
-    return resposta.choices[0].message.content
 
 # -------------------- APP principal --------------------
 def main():
@@ -122,7 +130,7 @@ def main():
                     "nome": nome,
                     "email": email,
                     "telefone": telefone,
-                    "aniversario": aniversario.strftime("%Y-%m-%d")
+                    "aniversio": aniversario.strftime("%Y-%m-%d")
                 }
                 CLIENTES.append(cliente)
                 salvar_google_sheets({"tipo": "cliente", **cliente})

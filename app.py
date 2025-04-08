@@ -1,8 +1,4 @@
-#Código por partes#
-
-
-# Agora, iniciando pela Parte 1 (Importações e configuração geral):
-
+# -------------------- app.py --------------------
 import streamlit as st
 import datetime
 import requests
@@ -16,27 +12,25 @@ from docx import Document
 import time
 import pandas as pd
 
-# -------------------- Configurações Iniciais --------------------
+# -------------------- Configurações --------------------
 st.set_page_config(page_title="Sistema Jurídico", layout="wide")
 load_dotenv()
 
-# Configuração da API DeepSeek (substituir pela sua chave real se precisar)
-DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY")
+# Configuração da API DeepSeek
+DEEPSEEK_API_KEY = "sk-4cd98d6c538f42f68bd820a6f3cc44c9"
 DEEPSEEK_ENDPOINT = "https://api.deepseek.com/v1/chat/completions"
 
-# URL do Web App do Google Apps Script (Webhook)
-GAS_WEB_APP_URL = os.getenv("GAS_WEB_APP_URL") or "https://script.google.com/macros/s/AKfycbytp0BA1x2PnjcFhunbgWEoMxZmCobyZHNzq3Mxabr41RScNAH-nYIlBd-OySWv5dcx/exec"
+# Configuração do Google Apps Script
+GAS_WEB_APP_URL = "https://script.google.com/macros/s/AKfycbytp0BA1x2PnjcFhunbgWEoMxZmCobyZHNzq3Mxabr41RScNAH-nYIlBd-OySWv5dcx/exec"
 
-# Dados temporários de login para simulação
+# Dados do sistema
 USERS = {
     "dono": {"senha": "dono123", "papel": "owner"},
     "gestor1": {"senha": "gestor123", "papel": "manager", "escritorio": "Escritorio A"},
     "adv1": {"senha": "adv123", "papel": "lawyer", "escritorio": "Escritorio A", "area": "Cível"},
 }
 
-
-
-# -------------------- Parte 2: Integração com Google Sheets --------------------
+# -------------------- Funções de Integração com Google Sheets --------------------
 def enviar_dados_para_planilha(tipo, dados):
     try:
         payload = {"tipo": tipo, **dados}
@@ -65,282 +59,677 @@ def carregar_dados_da_planilha(tipo, debug=False):
         st.warning(f"⚠️ Erro ao carregar dados ({tipo}): {e}")
         return []
 
-# Função auxiliar para carregar todos os dados do sistema
-def carregar_dados_globais():
-    return {
-        "CLIENTES": carregar_dados_da_planilha("Cliente"),
-        "PROCESSOS": carregar_dados_da_planilha("Processo"),
-        "ESCRITORIOS": carregar_dados_da_planilha("Escritorio"),
-        "HISTORICO_PETICOES": carregar_dados_da_planilha("Historico_Peticao"),
-        "FUNCIONARIOS": carregar_dados_da_planilha("Funcionarios"),
-    }
-
-# -------------------- Parte 3: Autenticação e Controle de Permissões --------------------
-def login(usuario, senha, funcionarios):
+# -------------------- Funções do Sistema --------------------
+def login(usuario, senha):
+    """Autentica usuário no sistema"""
     user = USERS.get(usuario)
-    if user and user["senha"] == senha:
-        return user
-    # Verifica se é um funcionário do Google Sheets
-    for f in funcionarios:
-        if f.get("usuario") == usuario and f.get("senha") == senha:
-            return {
-                "papel": f.get("papel", "lawyer"),
-                "escritorio": f.get("escritorio"),
-                "area": f.get("area"),
-                "nome": f.get("nome")
-            }
-    return None
+    return user if user and user["senha"] == senha else None
 
-def filtrar_processos_por_permissao(processos, papel, escritorio=None, area=None):
-    if papel == "owner":
-        return processos
-    elif papel == "manager":
-        return [p for p in processos if p.get("escritorio") == escritorio]
-    elif papel == "lawyer":
-        return [p for p in processos if p.get("escritorio") == escritorio and p.get("area") == area]
-    return []
-# -------------------- Parte 4: Dashboard com Escalas de Cor e Consulta Manual --------------------
 def calcular_status_processo(data_prazo, houve_movimentacao):
+    """Calcula o status do processo com base no prazo"""
     hoje = datetime.date.today()
     dias_restantes = (data_prazo - hoje).days
     if houve_movimentacao:
-        return "🔵"
+        return "🔵 Movimentado"
     elif dias_restantes < 0:
-        return "🔴"
+        return "🔴 Atrasado"
     elif dias_restantes <= 10:
-        return "🟡"
+        return "🟡 Atenção"
     else:
-        return "🟢"
+        return "🟢 Normal"
 
 def consultar_movimentacoes_simples(numero_processo):
+    """Consulta movimentações processuais simuladas"""
     url = f"https://esaj.tjsp.jus.br/cpopg/show.do?processo.codigo={numero_processo}"
     r = requests.get(url)
     soup = BeautifulSoup(r.text, "html.parser")
     andamentos = soup.find_all("tr", class_="fundocinza1")
     return [a.get_text(strip=True) for a in andamentos[:5]] if andamentos else ["Nenhuma movimentação encontrada"]
 
-def mostrar_dashboard(processos):
-    st.subheader("📋 Processos em Andamento")
-    if not processos:
-        st.info("Nenhum processo encontrado para exibir.")
-        return
-
-    for proc in processos:
-        data_prazo = datetime.date.fromisoformat(proc.get("prazo", datetime.date.today().isoformat()))
-        movimentacao = proc.get("houve_movimentacao", False)
-        status = calcular_status_processo(data_prazo, movimentacao)
-
-        with st.expander(f"{status} Processo: {proc['numero']}"):
-            st.markdown(f"**Cliente:** {proc['cliente']}")
-            st.markdown(f"**Descrição:** {proc['descricao']}")
-            st.markdown(f"**Área:** {proc['area']}")
-            st.markdown(f"**Prazo:** {data_prazo.strftime('%d/%m/%Y')}")
-            st.markdown(f"**Valor Total:** R$ {proc['valor_total']:.2f}")
-            st.markdown(f"**Responsável:** {proc['responsavel']}")
-
-            if st.button(f"🔍 Consultar movimentações ({proc['numero']})"):
-                with st.spinner("Consultando movimentações..."):
-                    movimentacoes = consultar_movimentacoes_simples(proc['numero'])
-                    st.success("Movimentações recentes:")
-                    for mov in movimentacoes:
-                        st.markdown(f"- {mov}")
-
-# -------------------- Parte 5: Cadastro e Unificação de Escritórios + Administrador --------------------
-def cadastrar_escritorio():
-    st.subheader("🏢 Cadastro e Gerenciamento de Escritórios")
-
-    with st.form("form_escritorio"):
-        col1, col2 = st.columns(2)
-        with col1:
-            nome = st.text_input("Nome do Escritório*")
-            cnpj = st.text_input("CNPJ*")
-            endereco = st.text_input("Endereço*")
-            telefone = st.text_input("Telefone*")
-            email = st.text_input("Email*")
-        with col2:
-            responsavel_tecnico = st.text_input("Responsável Técnico*")
-            email_tecnico = st.text_input("Email Técnico*")
-            telefone_tecnico = st.text_input("Telefone Técnico*")
-            area_atuacao = st.multiselect("Áreas de Atuação", ["Cível", "Criminal", "Trabalhista", "Previdenciário", "Tributário"])
-
-        st.markdown("### Dados do Administrador do Escritório")
-        adm_usuario = st.text_input("Usuário Administrador*")
-        adm_senha = st.text_input("Senha*")
-
-        if st.form_submit_button("Salvar Escritório e Administrador"):
-            campos_obrigatorios = [nome, cnpj, endereco, telefone, email, responsavel_tecnico, email_tecnico, telefone_tecnico, adm_usuario, adm_senha]
-            if not all(campos_obrigatorios):
-                st.warning("Preencha todos os campos obrigatórios marcados com *")
-            else:
-                dados_escritorio = {
-                    "nome": nome,
-                    "cnpj": cnpj,
-                    "endereco": endereco,
-                    "telefone": telefone,
-                    "email": email,
-                    "data_cadastro": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                    "responsavel": st.session_state.get("usuario", "sistema"),
-                    "responsavel_tecnico": responsavel_tecnico,
-                    "telefone_tecnico": telefone_tecnico,
-                    "email_tecnico": email_tecnico,
-                    "area_atuacao": ", ".join(area_atuacao)
-                }
-                dados_admin = {
-                    "tipo": "Funcionarios",
-                    "nome": responsavel_tecnico,
-                    "usuario": adm_usuario,
-                    "senha": adm_senha,
-                    "papel": "manager",
-                    "escritorio": nome,
-                    "area": ", ".join(area_atuacao)
-                }
-                ok1 = enviar_dados_para_planilha("Escritorio", dados_escritorio)
-                ok2 = enviar_dados_para_planilha("Funcionarios", dados_admin)
-                if ok1 and ok2:
-                    st.success("Escritório e administrador cadastrados com sucesso!")
-
-
-# -------------------- Parte 6: Cadastro de Funcionários com Limitação por Área --------------------
-def cadastrar_funcionario(escritorios):
-    st.subheader("👤 Cadastro de Funcionários")
-
-    with st.form("form_funcionario"):
-        nome = st.text_input("Nome Completo*")
-        usuario = st.text_input("Usuário de Acesso*")
-        senha = st.text_input("Senha de Acesso*")
-        escritorio = st.selectbox("Escritório*", [e["nome"] for e in escritorios])
-        papel = st.selectbox("Função no Sistema*", ["lawyer", "manager"])
-        areas = st.multiselect("Áreas de Acesso Permitidas*", ["Cível", "Criminal", "Trabalhista", "Previdenciário", "Tributário"])
-
-        if st.form_submit_button("Salvar Funcionário"):
-            if not nome or not usuario or not senha or not escritorio or not areas:
-                st.warning("Preencha todos os campos obrigatórios!")
-            else:
-                dados = {
-                    "tipo": "Funcionarios",
-                    "nome": nome,
-                    "usuario": usuario,
-                    "senha": senha,
-                    "papel": papel,
-                    "escritorio": escritorio,
-                    "area": ", ".join(areas)
-                }
-                if enviar_dados_para_planilha("Funcionarios", dados):
-                    st.success("Funcionário cadastrado com sucesso!")
-
-# -------------------- Parte 7: Relatórios com Restrições por Papel --------------------
-def gerar_relatorios(processos, papel, escritorio=None, area=None):
-    st.subheader("📊 Relatórios de Processos")
-
-    filtros = {}
-    if papel == "manager":
-        filtros["escritorio"] = escritorio
-    elif papel == "lawyer":
-        filtros["escritorio"] = escritorio
-        filtros["area"] = area
-
-    processos_filtrados = [p for p in processos if
-        (not filtros.get("escritorio") or p.get("escritorio") == filtros["escritorio"]) and
-        (not filtros.get("area") or p.get("area") == filtros["area"])]
-
-    if not processos_filtrados:
-        st.info("Nenhum processo encontrado com os filtros de acesso.")
-        return
-
-    st.markdown(f"**Total de processos:** {len(processos_filtrados)}")
-    df = pd.DataFrame(processos_filtrados)
-    st.dataframe(df)
-
-    col1, col2 = st.columns(2)
-    with col1:
-        if st.button("📄 Exportar para PDF"):
-            pdf = FPDF()
-            pdf.add_page()
-            pdf.set_font("Arial", size=12)
-            pdf.cell(200, 10, txt="Relatório de Processos", ln=1, align='C')
-            pdf.ln(10)
-            for index, row in df.iterrows():
-                linha = f"{row['numero']} - {row['cliente']} ({row['area']})"
-                pdf.cell(200, 10, txt=linha, ln=1)
-            nome_pdf = "relatorio_processos.pdf"
-            pdf.output(nome_pdf)
-            with open(nome_pdf, "rb") as f:
-                st.download_button("Download PDF", f, file_name=nome_pdf)
-    with col2:
-        if st.button("📝 Exportar para DOCX"):
-            doc = Document()
-            doc.add_heading("Relatório de Processos", 0)
-            for index, row in df.iterrows():
-                doc.add_paragraph(f"Processo {row['numero']} - Cliente: {row['cliente']} - Área: {row['area']}")
-            nome_docx = "relatorio_processos.docx"
-            doc.save(nome_docx)
-            with open(nome_docx, "rb") as f:
-                st.download_button("Download DOCX", f, file_name=nome_docx)
-
-# -------------------- Parte 8: Integração no Menu Principal --------------------
-def main():
-    st.title("⚖️ Sistema Jurídico Inteligente")
+def gerar_peticao_ia(prompt, temperatura=0.7, max_tokens=2000, tentativas=3):
+    """Gera petição com tratamento robusto de timeout e retry"""
+    headers = {
+        "Content-Type": "application/json",
+        "Authorization": f"Bearer {DEEPSEEK_API_KEY}"
+    }
     
-    # 1. Controle de sessão explícito (NOVO)
-    if 'logged_in' not in st.session_state:
-        st.session_state.logged_in = False
+    payload = {
+        "model": "deepseek-chat",
+        "messages": [
+            {
+                "role": "system",
+                "content": "Você é um assistente jurídico especializado. Responda com linguagem técnica formal."
+            },
+            {
+                "role": "user",
+                "content": prompt
+            }
+        ],
+        "temperature": temperatura,
+        "max_tokens": max_tokens
+    }
     
-    # 2. Bloco de login separado (REESTRUTURADO)
-    if not st.session_state.logged_in:
-        with st.sidebar:
-            st.header("🔐 Login")
-            usuario = st.text_input("Usuário", key="input_usuario")
-            senha = st.text_input("Senha", type="password", key="input_senha")
+    for tentativa in range(tentativas):
+        try:
+            start_time = time.time()
             
-            if st.button("Entrar"):
-                dados = carregar_dados_globais()  # ← Agora carrega dados SOMENTE ao tentar login
-                user = login(usuario, senha, dados["FUNCIONARIOS"])
+            with httpx.Client(timeout=30) as client:
+                response = client.post(
+                    DEEPSEEK_ENDPOINT,
+                    headers=headers,
+                    json=payload
+                )
+            
+            response_time = time.time() - start_time
+            st.sidebar.metric("Tempo de resposta API", f"{response_time:.2f}s")
+            
+            response.raise_for_status()
+            resposta_json = response.json()
+            
+            if not resposta_json.get('choices'):
+                raise ValueError("Resposta da API incompleta")
                 
-                if user:
-                    st.session_state.logged_in = True  # ← Estado de login explícito
-                    st.session_state.usuario = usuario
-                    st.session_state.papel = user["papel"]
-                    st.session_state.escritorio = user.get("escritorio")
-                    st.session_state.area = user.get("area")
-                    st.session_state.nome = user.get("nome", usuario)  # ← Novo campo
-                    st.success(f"Bem-vindo, {st.session_state.nome}!")  # ← Feedback personalizado
-                    st.rerun()  # ← Recarrega a página para atualizar o menu
-                else:
-                    st.error("Usuário ou senha inválidos")
+            return resposta_json['choices'][0]['message']['content']
+            
+        except httpx.ReadTimeout:
+            if tentativa < tentativas - 1:
+                st.warning(f"Tentativa {tentativa + 1} falhou (timeout). Tentando novamente...")
+                continue
+            else:
+                raise Exception("O servidor demorou muito para responder após várias tentativas")
+                
+        except httpx.HTTPStatusError as e:
+            error_msg = f"Erro HTTP {e.response.status_code}"
+            if e.response.status_code == 402:
+                error_msg += " - Saldo insuficiente na API"
+            raise Exception(f"{error_msg}: {e.response.text}")
+            
+        except Exception as e:
+            if tentativa == tentativas - 1:
+                raise Exception(f"Erro na requisição: {str(e)}")
+            continue
+    
+    return "❌ Falha ao gerar petição após múltiplas tentativas"
+
+def exportar_pdf(texto, nome_arquivo="peticao"):
+    """Exporta texto para PDF"""
+    pdf = FPDF()
+    pdf.add_page()
+    pdf.set_font("Arial", size=12)
+    pdf.multi_cell(0, 10, texto)
+    pdf.output(f"{nome_arquivo}.pdf")
+    return f"{nome_arquivo}.pdf"
+
+def exportar_docx(texto, nome_arquivo="peticao"):
+    """Exporta texto para DOCX"""
+    doc = Document()
+    doc.add_paragraph(texto)
+    doc.save(f"{nome_arquivo}.docx")
+    return f"{nome_arquivo}.docx"
+
+def gerar_relatorio_pdf(dados, nome_arquivo="relatorio"):
+    """Gera relatório em PDF com tabela de dados"""
+    pdf = FPDF()
+    pdf.add_page()
+    pdf.set_font("Arial", size=12)
+    
+    # Título
+    pdf.cell(200, 10, txt="Relatório de Processos", ln=1, align='C')
+    pdf.ln(10)
+    
+    # Cabeçalho da tabela
+    col_widths = [40, 30, 50, 30, 40]
+    headers = ["Cliente", "Número", "Área", "Status", "Responsável"]
+    
+    for i, header in enumerate(headers):
+        pdf.cell(col_widths[i], 10, txt=header, border=1)
+    pdf.ln()
+    
+    # Linhas da tabela
+    for processo in dados:
+        prazo = datetime.date.fromisoformat(processo.get("prazo", datetime.date.today().isoformat()))
+        status = calcular_status_processo(prazo, processo.get("houve_movimentacao", False))
         
-        st.info("Por favor, faça login para acessar o sistema.")  # ← Mensagem amigável (NOVO)
-        return  # ← Encerra a execução se não estiver logado
+        cols = [
+            processo["cliente"],
+            processo["numero"],
+            processo["area"],
+            status,
+            processo["responsavel"]
+        ]
+        
+        for i, col in enumerate(cols):
+            pdf.cell(col_widths[i], 10, txt=str(col), border=1)
+        pdf.ln()
+    
+    pdf.output(f"{nome_arquivo}.pdf")
+    return f"{nome_arquivo}.pdf"
 
-    # 3. Menu principal (APENAS para usuários logados) (REORGANIZADO)
-    dados = carregar_dados_globais()  # ← Dados carregados APÓS login
-    papel = st.session_state.papel
-    escritorio = st.session_state.get("escritorio")
-    area = st.session_state.get("area")
+def aplicar_filtros(dados, filtros):
+    """Aplica filtros aos dados"""
+    resultados = dados.copy()
+    
+    for campo, valor in filtros.items():
+        if valor:
+            if campo == "data_inicio":
+                resultados = [r for r in resultados if datetime.date.fromisoformat(r["data_cadastro"][:10]) >= valor]
+            elif campo == "data_fim":
+                resultados = [r for r in resultados if datetime.date.fromisoformat(r["data_cadastro"][:10]) <= valor]
+            else:
+                resultados = [r for r in resultados if str(valor).lower() in str(r.get(campo, "")).lower()]
+    
+    return resultados
 
-    # 4. Sidebar com informações do usuário (NOVO)
+def verificar_movimentacao_manual(numero_processo):
+    """Verificação manual de movimentação de processo"""
+    with st.spinner(f"Verificando movimentações para o processo {numero_processo}..."):
+        time.sleep(2)  # Simula tempo de consulta
+        movimentacoes = consultar_movimentacoes_simples(numero_processo)
+        return movimentacoes
+
+def obter_processos_por_usuario(papel, escritorio=None, area=None):
+    """Filtra processos com base nas permissões do usuário"""
+    processos = carregar_dados_da_planilha("Processo") or []
+    
+    if papel == "owner":
+        return processos
+    elif papel == "manager":
+        return [p for p in processos if p.get("escritorio") == escritorio]
+    elif papel == "lawyer":
+        return [p for p in processos if p.get("escritorio") == escritorio and p.get("area") == area]
+    else:
+        return []
+
+# -------------------- Interface Principal --------------------
+def main():
+    st.title("Sistema Jurídico com DeepSeek AI")
+
+    # Carrega dados do Google Sheets
+    CLIENTES = carregar_dados_da_planilha("Cliente") or []
+    PROCESSOS = carregar_dados_da_planilha("Processo") or []
+    ESCRITORIOS = carregar_dados_da_planilha("Escritorio") or []
+    HISTORICO_PETICOES = carregar_dados_da_planilha("Historico_Peticao") or []
+    FUNCIONARIOS = carregar_dados_da_planilha("Funcionario") or []
+
+    # Sidebar - Login
     with st.sidebar:
-        st.markdown(f"**Usuário:** {st.session_state.nome}")  # ← Mostra nome do usuário
-        st.markdown(f"**Papel:** {papel}")
-        if escritorio:
-            st.markdown(f"**Escritório:** {escritorio}")
-        if area:
-            st.markdown(f"**Área:** {area}")
+        st.header("🔐 Login")
+        usuario = st.text_input("Usuário")
+        senha = st.text_input("Senha", type="password")
         
-        if st.button("🚪 Sair"):  # ← Botão de logout (NOVO)
-            st.session_state.clear()
-            st.rerun()
+        if st.button("Entrar"):
+            user = login(usuario, senha)
+            if user:
+                st.session_state.usuario = usuario
+                st.session_state.papel = user["papel"]
+                st.session_state.dados_usuario = user
+                st.success("Login realizado com sucesso!")
+            else:
+                st.error("Credenciais inválidas")
+
+    # Conteúdo principal após login
+    if "usuario" in st.session_state:
+        papel = st.session_state.papel
+        escritorio_usuario = st.session_state.dados_usuario.get("escritorio")
+        area_usuario = st.session_state.dados_usuario.get("area")
         
-        menu = ["Dashboard", "Relatórios"]
+        st.sidebar.success(f"Bem-vindo, {st.session_state.usuario} ({papel})")
+
+        # Menu principal
+        opcoes = ["Dashboard", "Clientes", "Processos", "Petições IA", "Histórico", "Relatórios"]
         if papel == "owner":
-            menu += ["Cadastrar Escritório", "Cadastrar Funcionário"]
+            opcoes.extend(["Gerenciar Escritórios", "Gerenciar Funcionários"])
         elif papel == "manager":
-            menu += ["Cadastrar Funcionário"]
+            opcoes.extend(["Gerenciar Funcionários"])
 
-        escolha = st.radio("Navegação", menu)  # ← Menu agora é exibido CONDICIONALMENTE
+        escolha = st.sidebar.selectbox("Menu", opcoes)
 
-    # ... (restante do código mantido, mas só executa se estiver logado)
+        # Dashboard
+        if escolha == "Dashboard":
+            st.subheader("📋 Painel de Controle de Processos")
+            
+            # Filtros para o dashboard
+            with st.expander("🔍 Filtros", expanded=True):
+                col1, col2, col3 = st.columns(3)
+                with col1:
+                    filtro_area = st.selectbox("Área", ["Todas"] + list(set(p["area"] for p in PROCESSOS)))
+                with col2:
+                    filtro_status = st.selectbox("Status", ["Todos", "🟢 Normal", "🟡 Atenção", "🔴 Atrasado", "🔵 Movimentado"])
+                with col3:
+                    filtro_escritorio = st.selectbox("Escritório", ["Todos"] + list(set(p["escritorio"] for p in PROCESSOS)))
+            
+            # Obter processos visíveis ao usuário
+            processos_visiveis = obter_processos_por_usuario(papel, escritorio_usuario, area_usuario)
+            
+            # Aplicar filtros
+            if filtro_area != "Todas":
+                processos_visiveis = [p for p in processos_visiveis if p["area"] == filtro_area]
+            if filtro_escritorio != "Todos":
+                processos_visiveis = [p for p in processos_visiveis if p["escritorio"] == filtro_escritorio]
+            if filtro_status != "Todos":
+                processos_visiveis = [
+                    p for p in processos_visiveis 
+                    if calcular_status_processo(
+                        datetime.date.fromisoformat(p.get("prazo", datetime.date.today().isoformat())),
+                        p.get("houve_movimentacao", False)
+                    ) == filtro_status
+                ]
+            
+            # Exibir métricas resumidas
+            st.subheader("📊 Visão Geral")
+            col1, col2, col3, col4 = st.columns(4)
+            with col1:
+                st.metric("Total Processos", len(processos_visiveis))
+            with col2:
+                st.metric("Atrasados", len([p for p in processos_visiveis if calcular_status_processo(
+                    datetime.date.fromisoformat(p.get("prazo", datetime.date.today().isoformat())),
+                    p.get("houve_movimentacao", False)
+                ) == "🔴 Atrasado"]))
+            with col3:
+                st.metric("Para Atenção", len([p for p in processos_visiveis if calcular_status_processo(
+                    datetime.date.fromisoformat(p.get("prazo", datetime.date.today().isoformat())),
+                    p.get("houve_movimentacao", False)
+                ) == "🟡 Atenção"]))
+            with col4:
+                st.metric("Movimentados", len([p for p in processos_visiveis if p.get("houve_movimentacao", False)]))
+            
+            # Exibir tabela de processos
+            st.subheader("📋 Lista de Processos")
+            if processos_visiveis:
+                df = pd.DataFrame(processos_visiveis)
+                
+                # Adiciona coluna de status calculado
+                df['Status'] = df.apply(lambda row: calcular_status_processo(
+                    datetime.date.fromisoformat(row.get("prazo", datetime.date.today().isoformat())),
+                    row.get("houve_movimentacao", False)
+                ), axis=1)
+                
+                # Ordena por status (Atrasados primeiro)
+                status_order = {"🔴 Atrasado": 0, "🟡 Atenção": 1, "🟢 Normal": 2, "🔵 Movimentado": 3}
+                df['Status_Order'] = df['Status'].map(status_order)
+                df = df.sort_values('Status_Order').drop('Status_Order', axis=1)
+                
+                # Exibe tabela
+                st.dataframe(df[['Status', 'numero', 'cliente', 'area', 'prazo', 'responsavel']])
+                
+                # Consulta manual de processo
+                st.subheader("🔍 Consulta Manual de Processo")
+                with st.form("consulta_processo"):
+                    num_processo = st.text_input("Número do Processo para Consulta")
+                    if st.form_submit_button("Verificar Movimentações"):
+                        if num_processo:
+                            movimentacoes = verificar_movimentacao_manual(num_processo)
+                            st.subheader(f"Movimentações do Processo {num_processo}")
+                            for mov in movimentacoes:
+                                st.write(f"- {mov}")
+                        else:
+                            st.warning("Por favor, insira um número de processo")
+            else:
+                st.info("Nenhum processo encontrado com os filtros aplicados")
 
-if __name__ == '__main__':
-    main()
+        # Clientes (mantido igual)
+        elif escolha == "Clientes":
+            st.subheader("👥 Cadastro de Clientes")
+            
+            with st.form("form_cliente"):
+                nome = st.text_input("Nome Completo*", key="nome_cliente")
+                email = st.text_input("E-mail*")
+                telefone = st.text_input("Telefone*")
+                aniversario = st.date_input("Data de Nascimento")
+                escritorio = st.selectbox("Escritório", [e["nome"] for e in ESCRITORIOS] + ["Outro"])
+                observacoes = st.text_area("Observações")
+                
+                if st.form_submit_button("Salvar Cliente"):
+                    if not nome or not email or not telefone:
+                        st.warning("Campos obrigatórios (*) não preenchidos!")
+                    else:
+                        novo_cliente = {
+                            "nome": nome,
+                            "email": email,
+                            "telefone": telefone,
+                            "aniversario": aniversario.strftime("%Y-%m-%d"),
+                            "observacoes": observacoes,
+                            "cadastro": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                            "responsavel": st.session_state.usuario,
+                            "escritorio": escritorio
+                        }
+                        if enviar_dados_para_planilha("Cliente", novo_cliente):
+                            CLIENTES.append(novo_cliente)
+                            st.success("Cliente cadastrado com sucesso!")
 
+        # Processos (mantido igual)
+        elif escolha == "Processos":
+            st.subheader("📄 Gestão de Processos")
+            
+            with st.form("form_processo"):
+                cliente_nome = st.text_input("Cliente*")
+                numero_processo = st.text_input("Número do Processo*")
+                tipo_contrato = st.selectbox("Tipo de Contrato*", ["Fixo", "Por Ato", "Contingência"])
+                descricao = st.text_area("Descrição do Caso*")
+                
+                col1, col2 = st.columns(2)
+                with col1:
+                    valor_total = st.number_input("Valor Total (R$)*", min_value=0.0, format="%.2f")
+                with col2:
+                    valor_movimentado = st.number_input("Valor Movimentado (R$)", min_value=0.0, format="%.2f")
+                
+                prazo = st.date_input("Prazo Final*", value=datetime.date.today() + datetime.timedelta(days=30))
+                houve_movimentacao = st.checkbox("Houve movimentação recente?")
+                area = st.selectbox("Área Jurídica*", ["Cível", "Criminal", "Trabalhista", "Previdenciário", "Tributário"])
+                
+                if st.form_submit_button("Salvar Processo"):
+                    if not cliente_nome or not numero_processo or not descricao:
+                        st.warning("Campos obrigatórios (*) não preenchidos!")
+                    else:
+                        novo_processo = {
+                            "cliente": cliente_nome,
+                            "numero": numero_processo,
+                            "tipo": tipo_contrato,
+                            "descricao": descricao,
+                            "valor_total": valor_total,
+                            "valor_movimentado": valor_movimentado,
+                            "prazo": prazo.strftime("%Y-%m-%d"),
+                            "houve_movimentacao": houve_movimentacao,
+                            "escritorio": st.session_state.dados_usuario.get("escritorio", "Global"),
+                            "area": area,
+                            "responsavel": st.session_state.usuario,
+                            "data_cadastro": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                        }
+                        if enviar_dados_para_planilha("Processo", novo_processo):
+                            PROCESSOS.append(novo_processo)
+                            st.success("Processo cadastrado com sucesso!")
 
+        # Gerenciar Escritórios (unificado)
+        elif escolha == "Gerenciar Escritórios" and papel == "owner":
+            st.subheader("🏢 Gerenciamento de Escritórios")
+            
+            tab1, tab2, tab3 = st.tabs(["Cadastrar Escritório", "Lista de Escritórios", "Administradores"])
+            
+            with tab1:
+                with st.form("form_escritorio"):
+                    st.subheader("Dados Cadastrais")
+                    nome = st.text_input("Nome do Escritório*")
+                    endereco = st.text_input("Endereço Completo*")
+                    telefone = st.text_input("Telefone*")
+                    email = st.text_input("E-mail*")
+                    cnpj = st.text_input("CNPJ*")
+                    
+                    st.subheader("Responsável Técnico")
+                    responsavel_tecnico = st.text_input("Nome do Responsável Técnico*")
+                    telefone_tecnico = st.text_input("Telefone do Responsável*")
+                    email_tecnico = st.text_input("E-mail do Responsável*")
+                    area_atuacao = st.multiselect("Áreas de Atuação", ["Cível", "Criminal", "Trabalhista", "Previdenciário", "Tributário"])
+                    
+                    if st.form_submit_button("Salvar Escritório"):
+                        campos_obrigatorios = [
+                            nome, endereco, telefone, email, cnpj,
+                            responsavel_tecnico, telefone_tecnico, email_tecnico
+                        ]
+                        
+                        if not all(campos_obrigatorios):
+                            st.warning("Todos os campos obrigatórios (*) devem ser preenchidos!")
+                        else:
+                            novo_escritorio = {
+                                "nome": nome,
+                                "endereco": endereco,
+                                "telefone": telefone,
+                                "email": email,
+                                "cnpj": cnpj,
+                                "data_cadastro": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                                "responsavel": st.session_state.usuario,
+                                "responsavel_tecnico": responsavel_tecnico,
+                                "telefone_tecnico": telefone_tecnico,
+                                "email_tecnico": email_tecnico,
+                                "area_atuacao": ", ".join(area_atuacao)
+                            }
+                            if enviar_dados_para_planilha("Escritorio", novo_escritorio):
+                                ESCRITORIOS.append(novo_escritorio)
+                                st.success("Escritório cadastrado com sucesso!")
+            
+            with tab2:
+                if ESCRITORIOS:
+                    st.dataframe(ESCRITORIOS)
+                else:
+                    st.info("Nenhum escritório cadastrado ainda")
+            
+            with tab3:
+                st.subheader("Administradores de Escritórios")
+                st.info("Funcionalidade em desenvolvimento - Aqui será possível cadastrar administradores para cada escritório")
+
+        # Gerenciar Funcionários
+        elif escolha == "Gerenciar Funcionários" and papel in ["owner", "manager"]:
+            st.subheader("👥 Cadastro de Funcionários")
+            
+            with st.form("form_funcionario"):
+                nome = st.text_input("Nome Completo*")
+                email = st.text_input("E-mail*")
+                telefone = st.text_input("Telefone*")
+                
+                escritorio = st.selectbox("Escritório*", [e["nome"] for e in ESCRITORIOS])
+                area_atuacao = st.selectbox("Área de Atuação*", ["Cível", "Criminal", "Trabalhista", "Previdenciário", "Tributário"])
+                papel_func = st.selectbox("Papel no Sistema*", ["manager", "lawyer", "assistant"])
+                
+                if st.form_submit_button("Cadastrar Funcionário"):
+                    if not nome or not email or not telefone:
+                        st.warning("Campos obrigatórios (*) não preenchidos!")
+                    else:
+                        novo_funcionario = {
+                            "nome": nome,
+                            "email": email,
+                            "telefone": telefone,
+                            "escritorio": escritorio,
+                            "area_atuacao": area_atuacao,
+                            "papel": papel_func,
+                            "data_cadastro": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                            "cadastrado_por": st.session_state.usuario
+                        }
+                        if enviar_dados_para_planilha("Funcionario", novo_funcionario):
+                            FUNCIONARIOS.append(novo_funcionario)
+                            st.success("Funcionário cadastrado com sucesso!")
+            
+            st.subheader("Lista de Funcionários")
+            if FUNCIONARIOS:
+                # Filtra por escritório se for manager
+                if papel == "manager":
+                    funcionarios_visiveis = [f for f in FUNCIONARIOS if f["escritorio"] == escritorio_usuario]
+                else:
+                    funcionarios_visiveis = FUNCIONARIOS
+                
+                if funcionarios_visiveis:
+                    st.dataframe(funcionarios_visiveis)
+                else:
+                    st.info("Nenhum funcionário cadastrado para este escritório")
+            else:
+                st.info("Nenhum funcionário cadastrado ainda")
+
+        # Petições IA (mantido igual)
+        elif escolha == "Petições IA":
+            st.subheader("🤖 Gerador de Petições com IA")
+            
+            with st.form("form_peticao"):
+                tipo_peticao = st.selectbox("Tipo de Petição*", [
+                    "Inicial Cível",
+                    "Resposta",
+                    "Recurso",
+                    "Memorial",
+                    "Contestação"
+                ])
+                
+                cliente_associado = st.selectbox("Cliente Associado", [c["nome"] for c in CLIENTES] + ["Nenhum"])
+                contexto = st.text_area("Descreva o caso*", 
+                                      help="Forneça detalhes sobre o caso, partes envolvidas, documentos relevantes etc.")
+                
+                col1, col2 = st.columns(2)
+                with col1:
+                    estilo = st.selectbox("Estilo de Redação*", ["Objetivo", "Persuasivo", "Técnico", "Detalhado"])
+                with col2:
+                    parametros = st.slider("Nível de Detalhe", 0.1, 1.0, 0.7)
+                
+                submitted = st.form_submit_button("Gerar Petição")
+            
+            if submitted:
+                if not contexto or not tipo_peticao:
+                    st.warning("Campos obrigatórios (*) não preenchidos!")
+                else:
+                    prompt = f"""
+                    Gere uma petição jurídica do tipo {tipo_peticao} com os seguintes detalhes:
+
+                    **Contexto do Caso:**
+                    {contexto}
+
+                    **Requisitos:**
+                    - Estilo: {estilo}
+                    - Linguagem jurídica formal brasileira
+                    - Estruturada com: 1. Preâmbulo 2. Fatos 3. Fundamentação Jurídica 4. Pedido
+                    - Cite artigos de lei e jurisprudência quando aplicável
+                    - Inclua fecho padrão (Nestes termos, pede deferimento)
+                    - Limite de {int(2000*parametros)} tokens
+                    """
+                    
+                    try:
+                        with st.spinner("Gerando petição com IA (pode levar alguns minutos)..."):
+                            resposta = gerar_peticao_ia(prompt, temperatura=parametros)
+                            st.session_state.ultima_peticao = resposta
+                            st.session_state.prompt_usado = prompt
+                            
+                            nova_peticao = {
+                                "tipo": tipo_peticao,
+                                "data": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                                "responsavel": st.session_state.usuario,
+                                "conteudo": resposta[:1000] + "..." if len(resposta) > 1000 else resposta,
+                                "escritorio": st.session_state.dados_usuario.get("escritorio", "Global"),
+                                "cliente_associado": cliente_associado if cliente_associado != "Nenhum" else ""
+                            }
+                            if enviar_dados_para_planilha("Historico_Peticao", nova_peticao):
+                                HISTORICO_PETICOES.append(nova_peticao)
+                                st.success("Petição gerada e salva com sucesso!")
+                        
+                        st.text_area("Petição Gerada", value=resposta, height=400, key="peticao_gerada")
+                        
+                    except Exception as e:
+                        st.error(f"Erro ao gerar petição: {str(e)}")
+            
+            if 'ultima_peticao' in st.session_state:
+                col1, col2 = st.columns(2)
+                with col1:
+                    pdf_file = exportar_pdf(st.session_state.ultima_peticao)
+                    with open(pdf_file, "rb") as f:
+                        st.download_button(
+                            "Exportar para PDF",
+                            f,
+                            file_name=f"peticao_{datetime.datetime.now().strftime('%Y%m%d')}.pdf",
+                            key="download_pdf"
+                        )
+                with col2:
+                    docx_file = exportar_docx(st.session_state.ultima_peticao)
+                    with open(docx_file, "rb") as f:
+                        st.download_button(
+                            "Exportar para DOCX",
+                            f,
+                            file_name=f"peticao_{datetime.datetime.now().strftime('%Y%m%d')}.docx",
+                            key="download_docx"
+                        )
+
+        # Histórico (mantido igual)
+        elif escolha == "Histórico":
+            st.subheader("📜 Histórico de Petições")
+            
+            if HISTORICO_PETICOES:
+                for item in reversed(HISTORICO_PETICOES):
+                    with st.expander(f"{item['tipo']} - {item['data']} - {item.get('cliente_associado', '')}"):
+                        st.write(f"**Responsável:** {item['responsavel']}")
+                        st.write(f"**Escritório:** {item.get('escritorio', '')}")
+                        st.text_area("Conteúdo", value=item['conteudo'], key=item['data'], disabled=True)
+            else:
+                st.info("Nenhuma petição gerada ainda")
+
+        # Relatórios
+        elif escolha == "Relatórios":
+            st.subheader("📊 Relatórios Personalizados")
+            
+            with st.expander("🔍 Filtros Avançados", expanded=True):
+                with st.form("form_filtros"):
+                    col1, col2, col3 = st.columns(3)
+                    
+                    with col1:
+                        tipo_relatorio = st.selectbox("Tipo de Relatório*", ["Processos", "Clientes", "Escritórios"])
+                        area_filtro = st.selectbox("Área", ["Todas"] + list(set(p["area"] for p in PROCESSOS)))
+                        status_filtro = st.selectbox("Status", ["Todos", "🟢 Normal", "🟡 Atenção", "🔴 Atrasado", "🔵 Movimentado"])
+                    
+                    with col2:
+                        escritorio_filtro = st.selectbox("Escritório", ["Todos"] + list(set(p["escritorio"] for p in PROCESSOS)))
+                        responsavel_filtro = st.selectbox("Responsável", ["Todos"] + list(set(p["responsavel"] for p in PROCESSOS)))
+                    
+                    with col3:
+                        data_inicio = st.date_input("Data Início")
+                        data_fim = st.date_input("Data Fim")
+                        formato_exportacao = st.selectbox("Formato de Exportação", ["PDF", "DOCX", "CSV"])
+                    
+                    if st.form_submit_button("Aplicar Filtros"):
+                        filtros = {}
+                        if area_filtro != "Todas":
+                            filtros["area"] = area_filtro
+                        if escritorio_filtro != "Todos":
+                            filtros["escritorio"] = escritorio_filtro
+                        if responsavel_filtro != "Todos":
+                            filtros["responsavel"] = responsavel_filtro
+                        if data_inicio:
+                            filtros["data_inicio"] = data_inicio
+                        if data_fim:
+                            filtros["data_fim"] = data_fim
+                        
+                        # Aplica filtros com base no tipo de relatório
+                        if tipo_relatorio == "Processos":
+                            dados_filtrados = aplicar_filtros(PROCESSOS, filtros)
+                            
+                            # Filtro adicional por status
+                            if status_filtro != "Todos":
+                                dados_filtrados = [
+                                    p for p in dados_filtrados 
+                                    if calcular_status_processo(
+                                        datetime.date.fromisoformat(p.get("prazo", datetime.date.today().isoformat())),
+                                        p.get("houve_movimentacao", False)
+                                    ) == status_filtro
+                                ]
+                            
+                            st.session_state.dados_relatorio = dados_filtrados
+                            st.session_state.tipo_relatorio = "Processos"
+                        
+                        elif tipo_relatorio == "Clientes":
+                            dados_filtrados = aplicar_filtros(CLIENTES, filtros)
+                            st.session_state.dados_relatorio = dados_filtrados
+                            st.session_state.tipo_relatorio = "Clientes"
+                        
+                        elif tipo_relatorio == "Escritórios":
+                            dados_filtrados = aplicar_filtros(ESCRITORIOS, filtros)
+                            st.session_state.dados_relatorio = dados_filtrados
+                            st.session_state.tipo_relatorio = "Escritórios"
+            
+            # Seção de resultados
+            if "dados_relatorio" in st.session_state and st.session_state.dados_relatorio:
+                st.write(f"{st.session_state.tipo_relatorio} encontrados: {len(st.session_state.dados_relatorio)}")
+                
+                # Botão de exportação
+                if st.button(f"Exportar Relatório ({formato_exportacao})"):
+                    if formato_exportacao == "PDF":
+                        if st.session_state.tipo_relatorio == "Processos":
+                            arquivo = gerar_relatorio_pdf(st.session_state.dados_relatorio)
+                        else:
+                            arquivo = exportar_pdf(str(st.session_state.dados_relatorio))
+                        
+                        with open(arquivo, "rb") as f:
+                            st.download_button("Baixar PDF", f, file_name=arquivo)
+                    
+                    elif formato_exportacao == "DOCX":
+                        if st.session_state.tipo_relatorio == "Processos":
+                            texto = "\n".join([f"{p['numero']} - {p['cliente']}" for p in st.session_state.dados_relatorio])
+                        else:
+                            texto = str(st.session_state.dados_relatorio)
+                        
+                        arquivo = exportar_docx(texto)
+                        with open(arquivo, "rb") as f:
+                            st.download_button("Baixar DOCX", f, file_name=arquivo)
+                    
+                    elif formato_exportacao == "CSV":
+                        df = pd.DataFrame(st.session_state.dados_relatorio)
+                       

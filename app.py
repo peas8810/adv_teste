@@ -294,6 +294,7 @@ def main():
                 st.session_state.escritorio = user.get("escritorio")
                 st.session_state.area = user.get("area")
                 st.experimental_rerun()
+                return
             else:
                 st.error("Usuário ou senha inválidos")
 

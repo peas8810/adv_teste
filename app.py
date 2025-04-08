@@ -732,14 +732,13 @@ def main():
                     
                     elif formato_exportacao == "CSV":
                         df = pd.DataFrame(st.session_state.dados_relatorio)
-                            csv_bytes = df.to_csv(index=False).encode('utf-8')
-                            st.download_button(
-                                "Baixar CSV", 
-                                data=csv_bytes, 
-                                file_name=f"relatorio_{datetime.datetime.now().strftime('%Y%m%d')}.csv",
-                                mime="text/csv"
-                            )
-        
+                        csv_bytes = df.to_csv(index=False).encode('utf-8')
+                        st.download_button(
+                            "Baixar CSV", 
+                            data=csv_bytes, 
+                            file_name=f"relatorio_{datetime.datetime.now().strftime('%Y%m%d')}.csv",
+                            mime="text/csv"
+        )
                         st.dataframe(st.session_state.dados_relatorio)
                     else:
                         st.info("Nenhum dado encontrado com os filtros aplicados")

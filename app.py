@@ -289,14 +289,13 @@ def main():
         if st.button("Entrar"):
             user = login(usuario, senha, dados["FUNCIONARIOS"])
             if user:
-                if "usuario" not in st.session_state:
-                    st.session_state.logged_in = True
-                    st.session_state.usuario = usuario
-                    st.session_state.papel = user["papel"]
-                    st.session_state.escritorio = user.get("escritorio")
-                    st.session_state.area = user.get("area")
-                    st.success("Login realizado com sucesso!")
-                    st.stop()
+            st.session_state.logged_in = True
+            st.session_state.usuario = usuario
+            st.session_state.papel = user["papel"]
+            st.session_state.escritorio = user.get("escritorio")
+            st.session_state.area = user.get("area")
+            st.success("Login realizado com sucesso!")
+            st.stop()
             else:
                 st.error("Usuário ou senha inválidos")
 

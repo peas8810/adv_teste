@@ -289,7 +289,7 @@ def main():
         if st.button("Entrar"):
             user = login(usuario, senha, dados["FUNCIONARIOS"])
             if user:
-            st.session_state.logged_in = True
+                st.session_state.logged_in = True
             st.session_state.usuario = usuario
             st.session_state.papel = user["papel"]
             st.session_state.escritorio = user.get("escritorio")
@@ -329,4 +329,5 @@ def main():
 
 if __name__ == '__main__':
     main()
+
 

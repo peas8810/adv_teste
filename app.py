@@ -315,23 +315,29 @@ def main():
                     ) == filtro_status
                 ]
             
-            # Exibir métricas resumidas
-            st.subheader("📊 Visão Geral")
-            col1, col2, col3, col4 = st.columns(4)
-            with col1:
-                st.metric("Total Processos", len(processos_visiveis))
-            with col2:
-                st.metric("Atrasados", len([p for p in processos_visiveis if calcular_status_processo(
-                    datetime.date.fromisoformat(p.get("prazo", datetime.date.today().isoformat())),
-                    p.get("houve_movimentacao", False)
-                ) == "🔴 Atrasado"]))
-            with col3:
-                st.metric("Para Atenção", len([p for p in processos_visiveis if calcular_status_processo(
-                    datetime.date.fromisoformat(p.get("prazo", datetime.date.today().isoformat())),
-                    p.get("houve_movimentacao", False)
-                ) == "🟡 Atenção"]))
-            with col4:
-                st.metric("Movimentados", len([p for p in processos_visiveis if p.get("houve_movimentacao", False)]))
+           # Exibir métricas resumidas
+                st.subheader("📊 Visão Geral")
+                col1, col2, col3, col4 = st.columns(4)
+                with col1:
+                    st.metric("Total Processos", len(processos_visiveis))
+                with col2:
+                    st.metric("Atrasados", len([
+                        p for p in processos_visiveis 
+                        if calcular_status_processo(
+                            converter_prazo(p.get("prazo")),
+                            p.get("houve_movimentacao", False)
+                        ) == "🔴 Atrasado"
+                    ]))
+                with col3:
+                    st.metric("Para Atenção", len([
+                        p for p in processos_visiveis 
+                        if calcular_status_processo(
+                            converter_prazo(p.get("prazo")),
+                            p.get("houve_movimentacao", False)
+                        ) == "🟡 Atenção"
+                    ]))
+                with col4:
+                    st.metric("Movimentados", len([p for p in processos_visiveis if p.get("houve_movimentacao", False)]))
             
             # Exibir tabela de processos
             st.subheader("📋 Lista de Processos")

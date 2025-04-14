@@ -246,43 +246,54 @@ def aplicar_filtros(dados, filtros):
     Para os filtros de data, tenta extrair a data a partir das chaves "data_cadastro" ou "cadastro".
     Se não houver data ou a conversão falhar, o registro é ignorado para os filtros de data.
     """
-    def extrair_data(r):
-        # Tenta primeiro obter do campo "data_cadastro"; se não existir, tenta "cadastro"
-        data_str = r.get("data_cadastro") or r.get("cadastro")
-        if data_str:
-            try:
-                # Pega os 10 primeiros caracteres para o formato "YYYY-MM-DD"
-                return datetime.date.fromisoformat(data_str[:10])
-            except Exception:
-                return None
-        return None
+    def extrair_data(registro):
+        # Tenta obter a data de "data_cadastro" ou "cadastro" (usando .get() para evitar KeyError)
+        data_str = registro.get("data_cadastro") or registro.get("cadastro")
+        
+        if not data_str:
+            return None
+            
+        try:
+            # Pega os 10 primeiros caracteres (formato "YYYY-MM-DD") e converte para date
+            return datetime.date.fromisoformat(data_str[:10])
+        except (ValueError, TypeError):
+            # Captura erros de conversão (data inválida ou formato incorreto)
+            return None
 
     resultados = []
-    for r in dados:
+    
+    for registro in dados:
         incluir = True
-        data = extrair_data(r)
+        data_registro = extrair_data(registro)
         
         for campo, valor in filtros.items():
+            # Ignora filtros vazios
             if not valor:
-                continue  # Se o valor do filtro é vazio/nulo, ignora
+                continue
                 
+            # Filtros de data
             if campo == "data_inicio":
-                if data is None or data < valor:
+                if data_registro is None or data_registro < valor:
                     incluir = False
                     break
+                    
             elif campo == "data_fim":
-                if data is None or data > valor:
+                if data_registro is None or data_registro > valor:
                     incluir = False
                     break
+                    
+            # Filtros de outros campos
             else:
-                # Para outros campos, usa get() para evitar KeyError e converte para string
-                campo_valor = str(r.get(campo, "")).lower()
-                if str(valor).lower() not in campo_valor:
+                # Usa .get() com valor padrão vazio e comparação case-insensitive
+                valor_registro = str(registro.get(campo, "")).lower()
+                valor_filtro = str(valor).lower()
+                
+                if valor_filtro not in valor_registro:
                     incluir = False
                     break
         
         if incluir:
-            resultados.append(r)
+            resultados.append(registro)
     
     return resultados
 

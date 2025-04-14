@@ -22,7 +22,7 @@ from googleapiclient.http import MediaFileUpload
 st.set_page_config(page_title="Sistema Jurídico", layout="wide")
 load_dotenv()
 
-# Configuração da API DeepSeek e do Google Apps Script
+# Configuração da API DeepSeek e Google Apps Script
 DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY", "sk-590cfea82f49426c94ff423d41a91f49")
 DEEPSEEK_ENDPOINT = "https://api.deepseek.com/v1/chat/completions"
 GAS_WEB_APP_URL = "https://script.google.com/macros/s/AKfycbzx0HbjObfhgU4lqVFBI05neopT-rb5tqlGbJU19EguKq8LmmtzkTPtZjnMgCNmz8OtLw/exec"
@@ -38,9 +38,8 @@ USERS = {
 def get_drive_service():
     """
     Cria e retorna um objeto de serviço da API Google Drive.
-    Usa OAuth2 e armazena as credenciais em "token.json".
-    Em ambientes sem navegador, usa run_local_server(open_browser=False)
-    para exibir a URL de autorização para ser aberta manualmente.
+    Usa OAuth2 e armazena as credenciais em "token.json". Em ambientes sem navegador,
+    utiliza run_local_server(open_browser=False) para exibir a URL de autorização.
     """
     SCOPES = ['https://www.googleapis.com/auth/drive.file']
     client_config = {
@@ -64,22 +63,18 @@ def get_drive_service():
                 st.error(f"Erro ao atualizar credenciais: {e}")
                 creds = None
         if not creds:
-            from google_auth_oauthlib.flow import InstalledAppFlow
             flow = InstalledAppFlow.from_client_config(client_config, SCOPES)
-            # Aqui, em vez de run_console(), usamos run_local_server com open_browser=False.
             creds = flow.run_local_server(port=0, open_browser=False)
             with open(token_path, "w") as token:
                 token.write(creds.to_json())
-    from googleapiclient.discovery import build
     service = build('drive', 'v3', credentials=creds)
     return service
-
 
 def upload_to_drive(file, nome_arquivo):
     """
     Faz upload do arquivo para a pasta do Google Drive.
-    A pasta destino é definida pelo folder_id extraído da URL:
-    https://drive.google.com/drive/folders/1NZDsgzvP-st_g9etp6hyGorqgyCDOrCK?usp=sharing
+    A pasta destino é definida pelo folder_id extraído da URL fornecida.
+    Retorna o ID do arquivo enviado.
     """
     try:
         service = get_drive_service()
@@ -100,6 +95,7 @@ def upload_to_drive(file, nome_arquivo):
         return ""
 
 # -------------------- Outras Funções Auxiliares --------------------
+
 def converter_data(data_str):
     if not data_str:
         return datetime.date.today()
@@ -267,7 +263,7 @@ def main():
     if not isinstance(FUNCIONARIOS, list):
         FUNCIONARIOS = []
     
-     # Sidebar: Login
+    # Sidebar: Login
     with st.sidebar:
         st.header("🔐 Login")
         usuario = st.text_input("Usuário")
@@ -282,20 +278,21 @@ def main():
             else:
                 st.error("Credenciais inválidas")
     
-    # Se o usuário estiver logado, exibe menu e opção de sair
+    # Opção de Sair do Sistema
+    if "usuario" in st.session_state:
+        if st.sidebar.button("Sair"):
+            for key in ["usuario", "papel", "dados_usuario"]:
+                if key in st.session_state:
+                    del st.session_state[key]
+            st.sidebar.success("Você saiu do sistema!")
+            st.experimental_rerun()
+    
     if "usuario" in st.session_state:
         papel = st.session_state.papel
         escritorio_usuario = st.session_state.dados_usuario.get("escritorio")
         area_usuario = st.session_state.dados_usuario.get("area")
         st.sidebar.success(f"Bem-vindo, {st.session_state.usuario} ({papel})")
-        # Botão de logout
-        if st.sidebar.button("Sair"):
-            del st.session_state.usuario
-            del st.session_state.papel
-            del st.session_state.dados_usuario
-            st.sidebar.success("Você saiu do sistema!")
-            st.experimental_rerun()
-            
+        
         # Menu Principal
         opcoes = ["Dashboard", "Clientes", "Processos", "Históricos", "Relatórios", "Gerenciar Funcionários"]
         if papel == "owner":
@@ -324,8 +321,8 @@ def main():
                 processos_visiveis = [p for p in processos_visiveis if p.get("escritorio") == filtro_escritorio]
             if filtro_status != "Todos":
                 processos_visiveis = [p for p in processos_visiveis 
-                                        if calcular_status_processo(converter_data(p.get("prazo")),
-                                                                    p.get("houve_movimentacao", False)) == filtro_status]
+                                       if calcular_status_processo(converter_data(p.get("prazo")),
+                                                                   p.get("houve_movimentacao", False)) == filtro_status]
             st.subheader("📊 Visão Geral")
             col1, col2, col3, col4 = st.columns(4)
             with col1:
@@ -368,6 +365,10 @@ def main():
                         indice_inicial = 2
                     novo_status = st.selectbox("Status", opcoes_status, index=indice_inicial)
                     novo_anexo = st.file_uploader("Novo Anexo (opcional)", type=["pdf", "docx", "jpg", "png"])
+                    if proc.get("anexo"):
+                        # Cria link para download do anexo existente
+                        download_url = f"https://drive.google.com/uc?export=download&id={proc.get('anexo')}"
+                        st.markdown(f"[Baixar Anexo Atual]({download_url})")
                     col_edit, col_excluir = st.columns(2)
                     with col_edit:
                         if st.button("Atualizar Processo"):
@@ -532,6 +533,7 @@ def main():
                             filtros["data_inicio"] = data_inicio
                         if data_fim:
                             filtros["data_fim"] = data_fim
+                        
                         if tipo_relatorio == "Processos":
                             dados_filtrados = aplicar_filtros(PROCESSOS, filtros)
                             if status_filtro != "Todos":
@@ -636,7 +638,7 @@ def main():
             else:
                 st.info("Nenhum funcionário cadastrado ainda")
         
-        # ----------------- Aba Gerenciar Escritórios (Owner) - Código Antigo -----------------
+        # ----------------- Aba Gerenciar Escritórios (Owner) -----------------
         elif escolha == "Gerenciar Escritórios" and papel == "owner":
             st.subheader("🏢 Gerenciamento de Escritórios")
             tab1, tab2, tab3 = st.tabs(["Cadastrar Escritório", "Lista de Escritórios", "Administradores"])

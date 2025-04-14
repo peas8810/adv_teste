@@ -133,7 +133,7 @@ def gerar_peticao_ia(prompt, temperatura=0.7, max_tokens=2000, tentativas=3):
     """
     headers = {
         "Content-Type": "application/json",
-        "Authorization": f"Bearer {sk-590cfea82f49426c94ff423d41a91f49}"
+        "Authorization": f"Bearer {DEEPSEEK_API_KEY}"
     }
     payload = {
         "model": "deepseek-chat",
@@ -153,7 +153,8 @@ def gerar_peticao_ia(prompt, temperatura=0.7, max_tokens=2000, tentativas=3):
     for tentativa in range(tentativas):
         try:
             start_time = time.time()
-            with httpx.Client(timeout=30) as client:
+            # Timeout aumentado para 60 segundos
+            with httpx.Client(timeout=60) as client:
                 response = client.post(DEEPSEEK_ENDPOINT, headers=headers, json=payload)
             tempo_resposta = time.time() - start_time
             st.sidebar.metric("Tempo de resposta API", f"{tempo_resposta:.2f}s")
@@ -178,7 +179,7 @@ def gerar_peticao_ia(prompt, temperatura=0.7, max_tokens=2000, tentativas=3):
                 raise Exception(f"Erro na requisição: {str(e)}")
             continue
     return "❌ Falha ao gerar petição após múltiplas tentativas"
-
+    
 def exportar_pdf(texto, nome_arquivo="peticao"):
     """
     Exporta o texto informado para um arquivo PDF.

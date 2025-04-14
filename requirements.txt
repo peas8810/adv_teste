@@ -8,3 +8,6 @@ python-docx
 gspread
 oauth2client
 pandas
+google-api-python-client
+google-auth
+google-auth-oauthlib

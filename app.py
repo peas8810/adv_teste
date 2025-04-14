@@ -31,13 +31,20 @@ USERS = {
 
 def converter_prazo(prazo_str):
     """
-    Converte uma string no formato ISO ("YYYY-MM-DD") para um objeto date.
+    Converte uma string de data no formato ISO para um objeto date.
     Se o valor for nulo ou estiver em formato inválido, retorna a data de hoje.
     """
     if not prazo_str:
         return datetime.date.today()
     try:
-        return datetime.date.fromisoformat(prazo_str)
+        # Remover o "Z" final, se existir
+        prazo_str = prazo_str.replace("Z", "")
+        # Se contém "T", então é uma data e hora; vamos converter e pegar apenas a data
+        if "T" in prazo_str:
+            dt = datetime.datetime.fromisoformat(prazo_str)
+            return dt.date()
+        else:
+            return datetime.date.fromisoformat(prazo_str)
     except ValueError:
         st.warning(f"Formato de data inválido: {prazo_str}. Utilizando a data de hoje.")
         return datetime.date.today()

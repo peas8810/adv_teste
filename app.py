@@ -260,25 +260,30 @@ def aplicar_filtros(dados, filtros):
     resultados = []
     for r in dados:
         incluir = True
-        # Verifica os filtros de data, se houver
         data = extrair_data(r)
+        
         for campo, valor in filtros.items():
-            if valor:
-                if campo == "data_inicio":
-                    if data is None or data < valor:
-                        incluir = False
-                        break
-                elif campo == "data_fim":
-                    if data is None or data > valor:
-                        incluir = False
-                        break
-                else:
-                    # Para os demais campos, usamos o método get para evitar KeyError.
-                    if str(valor).lower() not in str(r.get(campo, "")).lower():
-                        incluir = False
-                        break
+            if not valor:
+                continue  # Se o valor do filtro é vazio/nulo, ignora
+                
+            if campo == "data_inicio":
+                if data is None or data < valor:
+                    incluir = False
+                    break
+            elif campo == "data_fim":
+                if data is None or data > valor:
+                    incluir = False
+                    break
+            else:
+                # Para outros campos, usa get() para evitar KeyError e converte para string
+                campo_valor = str(r.get(campo, "")).lower()
+                if str(valor).lower() not in campo_valor:
+                    incluir = False
+                    break
+        
         if incluir:
             resultados.append(r)
+    
     return resultados
 
 def verificar_movimentacao_manual(numero_processo):

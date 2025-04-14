@@ -1,13 +1,11 @@
 streamlit
+httpx
 requests
+pandas
 beautifulsoup4
 python-dotenv
-httpx
-fpdf2
+fpdf
 python-docx
-gspread
-oauth2client
-pandas
 google-api-python-client
 google-auth
 google-auth-oauthlib

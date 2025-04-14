@@ -39,6 +39,7 @@ def get_drive_service():
     """
     Cria e retorna um objeto de serviço da API Google Drive.
     Usa OAuth2 e armazena as credenciais em "token.json".
+    Em ambientes sem navegador, utiliza run_console() para autenticação.
     """
     SCOPES = ['https://www.googleapis.com/auth/drive.file']
     client_config = {
@@ -58,11 +59,13 @@ def get_drive_service():
         if creds and creds.expired and creds.refresh_token:
             try:
                 creds.refresh(requests.Request())
-            except Exception:
+            except Exception as e:
+                st.error(f"Erro ao atualizar credenciais: {e}")
                 creds = None
         if not creds:
             flow = InstalledAppFlow.from_client_config(client_config, SCOPES)
-            creds = flow.run_local_server(port=0)
+            # Em ambientes sem navegador, utiliza run_console()
+            creds = flow.run_console()
             with open(token_path, "w") as token:
                 token.write(creds.to_json())
     service = build('drive', 'v3', credentials=creds)

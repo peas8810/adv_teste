@@ -243,77 +243,103 @@ def main():
             opcoes.extend(["Gerenciar Funcionários"])
         escolha = st.sidebar.selectbox("Menu", opcoes)
         
-        # ----------------- Dashboard: Visualiza Processos e Filtros -----------------
-        if escolha == "Dashboard":
-            st.subheader("📋 Painel de Controle de Processos")
-            with st.expander("🔍 Filtros", expanded=True):
-                col1, col2, col3 = st.columns(3)
-                with col1:
-                    filtro_area = st.selectbox("Área", ["Todas"] + list(set(p["area"] for p in PROCESSOS)))
-                with col2:
-                    filtro_status = st.selectbox("Status", ["Todos", "🔴 Atrasado", "🟡 Atenção", "🟢 Normal", "🔵 Movimentado"])
-                with col3:
-                    filtro_escritorio = st.selectbox("Escritório", ["Todos"] + list(set(p["escritorio"] for p in PROCESSOS)))
-            
-            # Se o usuário tiver limitação de área (ex.: "lawyer" cível), filtramos
-            processos_visiveis = PROCESSOS.copy()
-            if area_usuario and area_usuario != "Todas":
-                processos_visiveis = [p for p in processos_visiveis if p.get("area") == area_usuario]
-            if filtro_area != "Todas":
-                processos_visiveis = [p for p in processos_visiveis if p.get("area") == filtro_area]
-            if filtro_escritorio != "Todos":
-                processos_visiveis = [p for p in processos_visiveis if p.get("escritorio") == filtro_escritorio]
-            if filtro_status != "Todos":
-                processos_visiveis = [
-                    p for p in processos_visiveis
-                    if calcular_status_processo(converter_data(p.get("prazo")), p.get("houve_movimentacao", False)) == filtro_status
-                ]
-            
-            # Métricas Resumidas
-            st.subheader("📊 Visão Geral")
-            col1, col2, col3, col4 = st.columns(4)
-            with col1:
-                st.metric("Total Processos", len(processos_visiveis))
-            with col2:
-                st.metric("Atrasados", len([
-                    p for p in processos_visiveis
-                    if calcular_status_processo(converter_data(p.get("prazo")), p.get("houve_movimentacao", False)) == "🔴 Atrasado"
-                ]))
-            with col3:
-                st.metric("Para Atenção", len([
-                    p for p in processos_visiveis
-                    if calcular_status_processo(converter_data(p.get("prazo")), p.get("houve_movimentacao", False)) == "🟡 Atenção"
-                ]))
-            with col4:
-                st.metric("Movimentados", len([p for p in processos_visiveis if p.get("houve_movimentacao", False)]))
-            
-            st.subheader("📋 Lista de Processos")
-            if processos_visiveis:
-                df = pd.DataFrame(processos_visiveis)
-                df['Status'] = df.apply(
-                    lambda row: calcular_status_processo(
-                        converter_data(row.get("prazo")),
-                        row.get("houve_movimentacao", False)
-                    ), axis=1
-                )
-                status_order = {"🔴 Atrasado": 0, "🟡 Atenção": 1, "🟢 Normal": 2, "🔵 Movimentado": 3}
-                df['Status_Order'] = df['Status'].map(status_order)
-                df = df.sort_values('Status_Order').drop('Status_Order', axis=1)
-                st.dataframe(df[['numero', 'cliente', 'area', 'prazo', 'responsavel', 'Status']])
-                
-                st.subheader("🔍 Consulta Manual de Processo")
-                with st.form("consulta_processo"):
-                    num_processo = st.text_input("Número do Processo para Consulta")
-                    if st.form_submit_button("Verificar Movimentações"):
-                        if num_processo:
-                            movimentacoes = consultar_movimentacoes_simples(num_processo)
-                            st.subheader(f"Movimentações do Processo {num_processo}")
-                            for mov in movimentacoes:
-                                st.write(f"- {mov}")
-                        else:
-                            st.warning("Por favor, insira um número de processo")
-            else:
-                st.info("Nenhum processo encontrado com os filtros aplicados")
+       # ----------------- Dashboard: Visualiza, Filtra e Edita Processos -----------------
+if escolha == "Dashboard":
+    st.subheader("📋 Painel de Controle de Processos")
+    with st.expander("🔍 Filtros", expanded=True):
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            filtro_area = st.selectbox("Área", ["Todas"] + list(set(p["area"] for p in PROCESSOS)))
+        with col2:
+            filtro_status = st.selectbox("Status", ["Todos", "🔴 Atrasado", "🟡 Atenção", "🟢 Normal", "🔵 Movimentado"])
+        with col3:
+            filtro_escritorio = st.selectbox("Escritório", ["Todos"] + list(set(p["escritorio"] for p in PROCESSOS)))
+    
+    # Aplicação dos filtros
+    processos_visiveis = PROCESSOS.copy()
+    if area_usuario and area_usuario != "Todas":
+        processos_visiveis = [p for p in processos_visiveis if p.get("area") == area_usuario]
+    if filtro_area != "Todas":
+        processos_visiveis = [p for p in processos_visiveis if p.get("area") == filtro_area]
+    if filtro_escritorio != "Todos":
+        processos_visiveis = [p for p in processos_visiveis if p.get("escritorio") == filtro_escritorio]
+    if filtro_status != "Todos":
+        processos_visiveis = [
+            p for p in processos_visiveis 
+            if calcular_status_processo(converter_data(p.get("prazo")), p.get("houve_movimentacao", False)) == filtro_status
+        ]
+    
+    # Métricas Resumidas
+    st.subheader("📊 Visão Geral")
+    col1, col2, col3, col4 = st.columns(4)
+    with col1:
+        st.metric("Total Processos", len(processos_visiveis))
+    with col2:
+        st.metric("Atrasados", len([
+            p for p in processos_visiveis 
+            if calcular_status_processo(converter_data(p.get("prazo")), p.get("houve_movimentacao", False)) == "🔴 Atrasado"
+        ]))
+    with col3:
+        st.metric("Para Atenção", len([
+            p for p in processos_visiveis 
+            if calcular_status_processo(converter_data(p.get("prazo")), p.get("houve_movimentacao", False)) == "🟡 Atenção"
+        ]))
+    with col4:
+        st.metric("Movimentados", len([p for p in processos_visiveis if p.get("houve_movimentacao", False)]))
+    
+    # Exibição da lista de processos
+    st.subheader("📋 Lista de Processos")
+    if processos_visiveis:
+        df = pd.DataFrame(processos_visiveis)
+        df['Status'] = df.apply(lambda row: calcular_status_processo(
+            converter_data(row.get("prazo")),
+            row.get("houve_movimentacao", False)
+        ), axis=1)
+        status_order = {"🔴 Atrasado": 0, "🟡 Atenção": 1, "🟢 Normal": 2, "🔵 Movimentado": 3}
+        df['Status_Order'] = df['Status'].map(status_order)
+        df = df.sort_values('Status_Order').drop('Status_Order', axis=1)
+        st.dataframe(df[['numero', 'cliente', 'area', 'prazo', 'responsavel', 'Status']])
+    else:
+        st.info("Nenhum processo encontrado com os filtros aplicados")
+    
+    # Seção de Edição de Processo
+    st.subheader("✏️ Editar Processo")
+    num_proc_editar = st.text_input("Digite o número do processo para editar")
+    if num_proc_editar:
+        proc = next((p for p in PROCESSOS if p.get("numero") == num_proc_editar), None)
+        if proc:
+            st.write("Edite os campos abaixo:")
+            # Permite alterar o nome do cliente, a descrição, e selecionar o status desejado
+            novo_cliente = st.text_input("Cliente", proc.get("cliente", ""))
+            nova_descricao = st.text_area("Descrição", proc.get("descricao", ""))
+            # A seleção de status traz as opções disponíveis e define o índice padrão conforme o status atual
+            opcoes_status = ["🔴 Atrasado", "🟡 Atenção", "🟢 Normal", "🔵 Movimentado"]
+            try:
+                status_atual = calcular_status_processo(converter_data(proc.get("prazo")), proc.get("houve_movimentacao", False))
+                indice_inicial = opcoes_status.index(status_atual)
+            except Exception:
+                indice_inicial = 2  # Padrão "Normal"
+            novo_status = st.selectbox("Status", opcoes_status, index=indice_inicial)
+            # Campo para anexar documentos
+            anexo = st.file_uploader("Anexar Documento", type=["pdf", "docx", "jpg", "png"])
+            if st.button("Atualizar Processo"):
+                atualizacoes = {
+                    "cliente": novo_cliente,
+                    "descricao": nova_descricao,
+                    "status_manual": novo_status
+                }
+                if anexo is not None:
+                    anexo_nome = f"anexo_{num_proc_editar}_{anexo.name}"
+                    with open(anexo_nome, "wb") as f:
+                        f.write(anexo.getbuffer())
+                    atualizacoes["anexo"] = anexo_nome
+                if atualizar_processo(num_proc_editar, atualizacoes):
+                    st.success("Processo atualizado com sucesso!")
+                else:
+                    st.error("Falha ao atualizar processo.")
+        else:
+            st.warning("Processo não encontrado.")
+
         
         # ----------------- Clientes: Cadastro e Relatório (mantendo lógica nova) -----------------
         elif escolha == "Clientes":

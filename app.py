@@ -243,17 +243,25 @@ def gerar_relatorio_pdf(dados, nome_arquivo="relatorio"):
 def aplicar_filtros(dados, filtros):
     """
     Aplica os filtros informados aos dados.
+    Para os filtros de data, somente os registros que possuírem a chave "data_cadastro" serão considerados.
     """
     resultados = dados.copy()
     for campo, valor in filtros.items():
         if valor:
             if campo == "data_inicio":
-                resultados = [r for r in resultados if datetime.date.fromisoformat(r["data_cadastro"][:10]) >= valor]
+                resultados = [
+                    r for r in resultados 
+                    if "data_cadastro" in r and datetime.date.fromisoformat(r["data_cadastro"][:10]) >= valor
+                ]
             elif campo == "data_fim":
-                resultados = [r for r in resultados if datetime.date.fromisoformat(r["data_cadastro"][:10]) <= valor]
+                resultados = [
+                    r for r in resultados 
+                    if "data_cadastro" in r and datetime.date.fromisoformat(r["data_cadastro"][:10]) <= valor
+                ]
             else:
                 resultados = [r for r in resultados if str(valor).lower() in str(r.get(campo, "")).lower()]
     return resultados
+
 
 def verificar_movimentacao_manual(numero_processo):
     """

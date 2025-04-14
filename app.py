@@ -243,27 +243,40 @@ def gerar_relatorio_pdf(dados, nome_arquivo="relatorio"):
 def aplicar_filtros(dados, filtros):
     """
     Aplica os filtros informados aos dados.
-    Para os filtros de data, somente os registros que possuírem a chave "data_cadastro" serão considerados.
+    Para os filtros de data, a função tenta obter a data do campo "data_cadastro".
+    Se esse campo não estiver presente, tenta usar o campo "cadastro".
+    Se nenhum campo estiver disponível ou o valor não puder ser convertido para data,
+    o registro é ignorado para o filtro de data.
     """
     resultados = dados.copy()
+    
+    # Função auxiliar para extrair a data de um registro
+    def extrair_data(r):
+        # Tenta primeiro o campo "data_cadastro", se não existir, usa "cadastro"
+        data_str = r.get("data_cadastro") or r.get("cadastro")
+        if data_str:
+            try:
+                # Pega os 10 primeiros caracteres para obter o formato "YYYY-MM-DD"
+                return datetime.date.fromisoformat(data_str[:10])
+            except ValueError:
+                return None
+        return None
+
     for campo, valor in filtros.items():
         if valor:
             if campo == "data_inicio":
                 resultados = [
                     r for r in resultados 
-                    if r.get("data_cadastro") and datetime.date.fromisoformat(r["data_cadastro"][:10]) >= valor
+                    if extrair_data(r) is not None and extrair_data(r) >= valor
                 ]
             elif campo == "data_fim":
                 resultados = [
                     r for r in resultados 
-                    if r.get("data_cadastro") and datetime.date.fromisoformat(r["data_cadastro"][:10]) <= valor
+                    if extrair_data(r) is not None and extrair_data(r) <= valor
                 ]
             else:
                 resultados = [r for r in resultados if str(valor).lower() in str(r.get(campo, "")).lower()]
     return resultados
-
-
-
 def verificar_movimentacao_manual(numero_processo):
     """
     Realiza a verificação manual das movimentações do processo especificado.

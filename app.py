@@ -22,7 +22,7 @@ from googleapiclient.http import MediaFileUpload
 st.set_page_config(page_title="Sistema Jurídico", layout="wide")
 load_dotenv()
 
-# Configuração da API DeepSeek e Google Apps Script
+# Configuração da API DeepSeek e do Google Apps Script
 DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY", "sk-590cfea82f49426c94ff423d41a91f49")
 DEEPSEEK_ENDPOINT = "https://api.deepseek.com/v1/chat/completions"
 GAS_WEB_APP_URL = "https://script.google.com/macros/s/AKfycbzx0HbjObfhgU4lqVFBI05neopT-rb5tqlGbJU19EguKq8LmmtzkTPtZjnMgCNmz8OtLw/exec"
@@ -38,8 +38,9 @@ USERS = {
 def get_drive_service():
     """
     Cria e retorna um objeto de serviço da API Google Drive.
-    Usa OAuth2 e armazena as credenciais em "token.json". Em ambientes sem navegador,
-    utiliza run_local_server(open_browser=False) para exibir a URL de autorização.
+    Usa OAuth2 para obtenção de credenciais e passa a chave API (developerKey) para o serviço.
+    As credenciais são armazenadas em 'token.json'. Em ambientes sem navegador, 
+    utiliza run_local_server(open_browser=False) para que a URL de autorização seja exibida sem abrir o navegador.
     """
     SCOPES = ['https://www.googleapis.com/auth/drive.file']
     client_config = {
@@ -67,35 +68,31 @@ def get_drive_service():
             creds = flow.run_local_server(port=0, open_browser=False)
             with open(token_path, "w") as token:
                 token.write(creds.to_json())
-    service = build('drive', 'v3', credentials=creds)
+    # Adiciona a chave API (developerKey) ao criar o serviço
+    service = build('drive', 'v3', credentials=creds, developerKey="AIzaSyDMOOy0wHxO-Es9aQ2WHrZTedinKeEOaXo")
     return service
 
 def upload_to_drive(file, nome_arquivo):
     """
-    Faz upload do arquivo para a pasta do Google Drive.
-    A pasta destino é definida pelo folder_id extraído da URL fornecida.
+    Faz upload do arquivo para uma pasta específica no Google Drive.
+    A pasta destino é definida pelo folder_id (extraído da URL do Drive).
     Retorna o ID do arquivo enviado.
     """
     try:
         service = get_drive_service()
-        # Salva o arquivo temporariamente
         temp_path = os.path.join(tempfile.gettempdir(), nome_arquivo)
         with open(temp_path, "wb") as f:
             f.write(file.getbuffer())
         folder_id = "1NZDsgzvP-st_g9etp6hyGorqgyCDOrCK"
-        file_metadata = {
-            "name": nome_arquivo,
-            "parents": [folder_id]
-        }
+        file_metadata = {"name": nome_arquivo, "parents": [folder_id]}
         media = MediaFileUpload(temp_path, resumable=True)
         uploaded = service.files().create(body=file_metadata, media_body=media, fields="id").execute()
-        return uploaded.get("id")  # Retorna o ID do arquivo no Drive
+        return uploaded.get("id")
     except Exception as e:
         st.error(f"Erro ao fazer upload para o Drive: {e}")
         return ""
 
 # -------------------- Outras Funções Auxiliares --------------------
-
 def converter_data(data_str):
     if not data_str:
         return datetime.date.today()
@@ -365,8 +362,8 @@ def main():
                         indice_inicial = 2
                     novo_status = st.selectbox("Status", opcoes_status, index=indice_inicial)
                     novo_anexo = st.file_uploader("Novo Anexo (opcional)", type=["pdf", "docx", "jpg", "png"])
+                    # Se houver anexo já cadastrado, exibe link para download
                     if proc.get("anexo"):
-                        # Cria link para download do anexo existente
                         download_url = f"https://drive.google.com/uc?export=download&id={proc.get('anexo')}"
                         st.markdown(f"[Baixar Anexo Atual]({download_url})")
                     col_edit, col_excluir = st.columns(2)

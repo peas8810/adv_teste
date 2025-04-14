@@ -16,7 +16,7 @@ st.set_page_config(page_title="Sistema Jurídico", layout="wide")
 load_dotenv()
 
 # Configuração da API DeepSeek e Google Apps Script
-DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY", "sk-4cd98d6c538f42f68bd820a6f3cc44c9")
+DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY", "sk-590cfea82f49426c94ff423d41a91f49")
 DEEPSEEK_ENDPOINT = "https://api.deepseek.com/v1/chat/completions"
 GAS_WEB_APP_URL = "https://script.google.com/macros/s/AKfycbzx0HbjObfhgU4lqVFBI05neopT-rb5tqlGbJU19EguKq8LmmtzkTPtZjnMgCNmz8OtLw/exec"
 

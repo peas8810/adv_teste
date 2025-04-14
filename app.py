@@ -251,16 +251,17 @@ def aplicar_filtros(dados, filtros):
             if campo == "data_inicio":
                 resultados = [
                     r for r in resultados 
-                    if "data_cadastro" in r and datetime.date.fromisoformat(r["data_cadastro"][:10]) >= valor
+                    if r.get("data_cadastro") and datetime.date.fromisoformat(r["data_cadastro"][:10]) >= valor
                 ]
             elif campo == "data_fim":
                 resultados = [
                     r for r in resultados 
-                    if "data_cadastro" in r and datetime.date.fromisoformat(r["data_cadastro"][:10]) <= valor
+                    if r.get("data_cadastro") and datetime.date.fromisoformat(r["data_cadastro"][:10]) <= valor
                 ]
             else:
                 resultados = [r for r in resultados if str(valor).lower() in str(r.get(campo, "")).lower()]
     return resultados
+
 
 
 def verificar_movimentacao_manual(numero_processo):

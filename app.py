@@ -243,42 +243,42 @@ def gerar_relatorio_pdf(dados, nome_arquivo="relatorio"):
 def aplicar_filtros(dados, filtros):
     """
     Aplica os filtros informados aos dados.
-    Para os filtros de data, tenta extrair a data dos campos "data_cadastro" ou "cadastro".
-    Registros que não tiverem uma data válida serão ignorados para os filtros de data.
+    Para os filtros de data, tenta extrair a data a partir das chaves "data_cadastro" ou "cadastro".
+    Se não houver data ou a conversão falhar, o registro é ignorado para os filtros de data.
     """
-    resultados = dados.copy()
-    
-    # Função auxiliar para extrair data de um registro
     def extrair_data(r):
-        # Tenta primeiro pelo campo "data_cadastro", depois "cadastro"
+        # Tenta primeiro obter do campo "data_cadastro"; se não existir, tenta "cadastro"
         data_str = r.get("data_cadastro") or r.get("cadastro")
-        if data_str is None:
-            return None
-        try:
-            return datetime.date.fromisoformat(data_str[:10])
-        except Exception:
-            return None
+        if data_str:
+            try:
+                # Pega os 10 primeiros caracteres para o formato "YYYY-MM-DD"
+                return datetime.date.fromisoformat(data_str[:10])
+            except Exception:
+                return None
+        return None
 
-    for campo, valor in filtros.items():
-        if valor:
-            if campo == "data_inicio":
-                novos = []
-                for r in resultados:
-                    data = extrair_data(r)
-                    if data and data >= valor:
-                        novos.append(r)
-                resultados = novos
-            elif campo == "data_fim":
-                novos = []
-                for r in resultados:
-                    data = extrair_data(r)
-                    if data and data <= valor:
-                        novos.append(r)
-                resultados = novos
-            else:
-                # Para demais campos, usamos get() para evitar KeyError.
-                resultados = [r for r in resultados if str(valor).lower() in str(r.get(campo, "")).lower()]
-    
+    resultados = []
+    for r in dados:
+        incluir = True
+        # Verifica os filtros de data, se houver
+        data = extrair_data(r)
+        for campo, valor in filtros.items():
+            if valor:
+                if campo == "data_inicio":
+                    if data is None or data < valor:
+                        incluir = False
+                        break
+                elif campo == "data_fim":
+                    if data is None or data > valor:
+                        incluir = False
+                        break
+                else:
+                    # Para os demais campos, usamos o método get para evitar KeyError.
+                    if str(valor).lower() not in str(r.get(campo, "")).lower():
+                        incluir = False
+                        break
+        if incluir:
+            resultados.append(r)
     return resultados
 
 def verificar_movimentacao_manual(numero_processo):

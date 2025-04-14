@@ -39,8 +39,8 @@ def get_drive_service():
     """
     Cria e retorna um objeto de serviço da API Google Drive.
     Usa OAuth2 para obtenção de credenciais e passa a chave API (developerKey) para o serviço.
-    As credenciais são armazenadas em 'token.json'. Em ambientes sem navegador, 
-    utiliza run_local_server(open_browser=False) para que a URL de autorização seja exibida sem abrir o navegador.
+    As credenciais são armazenadas em 'token.json'. Em ambientes sem navegador,
+    usa run_local_server(open_browser=False) para que a URL de autorização seja exibida no console.
     """
     SCOPES = ['https://www.googleapis.com/auth/drive.file']
     client_config = {
@@ -68,14 +68,15 @@ def get_drive_service():
             creds = flow.run_local_server(port=0, open_browser=False)
             with open(token_path, "w") as token:
                 token.write(creds.to_json())
-    # Adiciona a chave API (developerKey) ao criar o serviço
+    # Usa developerKey para ajudar na identificação (a API key não autoriza upload, mas é incluída na construção do serviço)
     service = build('drive', 'v3', credentials=creds, developerKey="AIzaSyDMOOy0wHxO-Es9aQ2WHrZTedinKeEOaXo")
     return service
 
 def upload_to_drive(file, nome_arquivo):
     """
     Faz upload do arquivo para uma pasta específica no Google Drive.
-    A pasta destino é definida pelo folder_id (extraído da URL do Drive).
+    A pasta destino é definida pelo folder_id extraído da URL: 
+    https://drive.google.com/drive/folders/1NZDsgzvP-st_g9etp6hyGorqgyCDOrCK
     Retorna o ID do arquivo enviado.
     """
     try:
@@ -83,7 +84,7 @@ def upload_to_drive(file, nome_arquivo):
         temp_path = os.path.join(tempfile.gettempdir(), nome_arquivo)
         with open(temp_path, "wb") as f:
             f.write(file.getbuffer())
-        folder_id = "1NZDsgzvP-st_g9etp6hyGorqgyCDOrCK"
+        folder_id = "1NZDsgzvP-st_g9etp6hyGorqgyCDOrCK"  # Certifique-se de que a pasta esteja compartilhada com a conta autenticada
         file_metadata = {"name": nome_arquivo, "parents": [folder_id]}
         media = MediaFileUpload(temp_path, resumable=True)
         uploaded = service.files().create(body=file_metadata, media_body=media, fields="id").execute()
@@ -275,7 +276,7 @@ def main():
             else:
                 st.error("Credenciais inválidas")
     
-    # Opção de Sair do Sistema
+    # Botão de Logout
     if "usuario" in st.session_state:
         if st.sidebar.button("Sair"):
             for key in ["usuario", "papel", "dados_usuario"]:
@@ -362,7 +363,6 @@ def main():
                         indice_inicial = 2
                     novo_status = st.selectbox("Status", opcoes_status, index=indice_inicial)
                     novo_anexo = st.file_uploader("Novo Anexo (opcional)", type=["pdf", "docx", "jpg", "png"])
-                    # Se houver anexo já cadastrado, exibe link para download
                     if proc.get("anexo"):
                         download_url = f"https://drive.google.com/uc?export=download&id={proc.get('anexo')}"
                         st.markdown(f"[Baixar Anexo Atual]({download_url})")

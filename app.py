@@ -39,7 +39,8 @@ def get_drive_service():
     """
     Cria e retorna um objeto de serviço da API Google Drive.
     Usa OAuth2 e armazena as credenciais em "token.json".
-    Em ambientes sem navegador, utiliza run_console() para autenticação.
+    Em ambientes sem navegador, usa run_local_server(open_browser=False)
+    para exibir a URL de autorização para ser aberta manualmente.
     """
     SCOPES = ['https://www.googleapis.com/auth/drive.file']
     client_config = {
@@ -63,13 +64,16 @@ def get_drive_service():
                 st.error(f"Erro ao atualizar credenciais: {e}")
                 creds = None
         if not creds:
+            from google_auth_oauthlib.flow import InstalledAppFlow
             flow = InstalledAppFlow.from_client_config(client_config, SCOPES)
-            # Em ambientes sem navegador, utiliza run_console()
-            creds = flow.run_console()
+            # Aqui, em vez de run_console(), usamos run_local_server com open_browser=False.
+            creds = flow.run_local_server(port=0, open_browser=False)
             with open(token_path, "w") as token:
                 token.write(creds.to_json())
+    from googleapiclient.discovery import build
     service = build('drive', 'v3', credentials=creds)
     return service
+
 
 def upload_to_drive(file, nome_arquivo):
     """

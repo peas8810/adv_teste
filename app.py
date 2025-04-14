@@ -11,6 +11,13 @@ import os
 from fpdf import FPDF
 from docx import Document
 
+# Imports para integração com Google Drive
+import tempfile
+from google.oauth2.credentials import Credentials
+from google_auth_oauthlib.flow import InstalledAppFlow
+from googleapiclient.discovery import build
+from googleapiclient.http import MediaFileUpload
+
 # -------------------- Configurações Iniciais --------------------
 st.set_page_config(page_title="Sistema Jurídico", layout="wide")
 load_dotenv()
@@ -20,15 +27,73 @@ DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY", "sk-590cfea82f49426c94ff423d41a
 DEEPSEEK_ENDPOINT = "https://api.deepseek.com/v1/chat/completions"
 GAS_WEB_APP_URL = "https://script.google.com/macros/s/AKfycbzx0HbjObfhgU4lqVFBI05neopT-rb5tqlGbJU19EguKq8LmmtzkTPtZjnMgCNmz8OtLw/exec"
 
-# Dados do sistema (usuários) - cada usuário possui "username" e "senha"
+# Dados do sistema (usuários) – cada usuário possui "username" e "senha"
 USERS = {
     "dono": {"username": "dono", "senha": "dono123", "papel": "owner"},
     "gestor1": {"username": "gestor1", "senha": "gestor123", "papel": "manager", "escritorio": "Escritorio A", "area": "Todas"},
     "adv1": {"username": "adv1", "senha": "adv123", "papel": "lawyer", "escritorio": "Escritorio A", "area": "Cível"},
 }
 
-# -------------------- Funções Auxiliares --------------------
+# -------------------- Funções de Integração com Google Drive --------------------
+def get_drive_service():
+    """
+    Cria e retorna um objeto de serviço da API Google Drive.
+    Usa OAuth2 e armazena as credenciais em 'token.json'.
+    """
+    SCOPES = ['https://www.googleapis.com/auth/drive.file']
+    client_config = {
+        "installed": {
+            "client_id": "911153011494-sof7lv46kqrt0av3dmob23otqdvsjjji.apps.googleusercontent.com",
+            "client_secret": "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",
+            "redirect_uris": ["urn:ietf:wg:oauth:2.0:oob", "http://localhost"],
+            "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+            "token_uri": "https://oauth2.googleapis.com/token"
+        }
+    }
+    creds = None
+    token_path = "token.json"
+    if os.path.exists(token_path):
+        creds = Credentials.from_authorized_user_file(token_path, SCOPES)
+    if not creds or not creds.valid:
+        if creds and creds.expired and creds.refresh_token:
+            try:
+                creds.refresh(requests.Request())
+            except Exception as e:
+                creds = None
+        if not creds:
+            flow = InstalledAppFlow.from_client_config(client_config, SCOPES)
+            creds = flow.run_local_server(port=0)
+            with open(token_path, "w") as token:
+                token.write(creds.to_json())
+    service = build('drive', 'v3', credentials=creds)
+    return service
 
+def upload_to_drive(file, nome_arquivo):
+    """
+    Faz upload do arquivo para uma pasta específica no Google Drive.
+    A pasta de destino é definida pelo folder_id extraído da URL:
+    https://drive.google.com/drive/folders/1NZDsgzvP-st_g9etp6hyGorqgyCDOrCK?usp=sharing
+    """
+    try:
+        service = get_drive_service()
+        # Salva o arquivo temporariamente
+        temp_path = os.path.join(tempfile.gettempdir(), nome_arquivo)
+        with open(temp_path, "wb") as f:
+            f.write(file.getbuffer())
+        # Folder ID extraído da URL acima
+        folder_id = "1NZDsgzvP-st_g9etp6hyGorqgyCDOrCK"
+        file_metadata = {
+            "name": nome_arquivo,
+            "parents": [folder_id]
+        }
+        media = MediaFileUpload(temp_path, resumable=True)
+        uploaded = service.files().create(body=file_metadata, media_body=media, fields="id").execute()
+        return uploaded.get("id")  # ou retorne uma URL se desejar
+    except Exception as e:
+        st.error(f"Erro ao fazer upload para o Drive: {e}")
+        return ""
+
+# -------------------- Outras Funções Auxiliares --------------------
 def converter_data(data_str):
     """
     Converte uma string de data no formato ISO para um objeto date.
@@ -199,6 +264,23 @@ def aplicar_filtros(dados, filtros):
             resultados.append(r)
     return resultados
 
+def atualizar_processo(numero_processo, atualizacoes):
+    """
+    Atualiza um processo enviando as modificações para a planilha.
+    O payload deve incluir "atualizar": True.
+    Se a atualização incluir exclusão, deve conter "excluir": True.
+    """
+    atualizacoes["numero"] = numero_processo
+    atualizacoes["atualizar"] = True
+    return enviar_dados_para_planilha("Processo", atualizacoes)
+
+def excluir_processo(numero_processo):
+    """
+    Exclui um processo enviando o payload com "excluir": True.
+    """
+    payload = {"numero": numero_processo, "excluir": True}
+    return enviar_dados_para_planilha("Processo", payload)
+
 # -------------------- Interface Principal --------------------
 def main():
     st.title("Sistema Jurídico")
@@ -263,11 +345,16 @@ def main():
                 prazo = st.date_input("Prazo Final*", value=datetime.date.today() + datetime.timedelta(days=30))
                 houve_movimentacao = st.checkbox("Houve movimentação recente?")
                 area = st.selectbox("Área Jurídica*", ["Cível", "Criminal", "Trabalhista", "Previdenciário", "Tributário"])
+                arquivo_proc = st.file_uploader("Anexar Documento (será enviado para o Drive)", type=["pdf", "docx", "jpg", "png"])
                 
                 if st.form_submit_button("Salvar Processo"):
                     if not cliente_nome or not numero_processo or not descricao:
                         st.warning("Campos obrigatórios (*) não preenchidos!")
                     else:
+                        if arquivo_proc is not None:
+                            anexo_path = upload_to_drive(arquivo_proc, f"anexo_{numero_processo}_{arquivo_proc.name}")
+                        else:
+                            anexo_path = ""
                         novo_processo = {
                             "cliente": cliente_nome,
                             "numero": numero_processo,
@@ -280,6 +367,7 @@ def main():
                             "escritorio": st.session_state.dados_usuario.get("escritorio", "Global"),
                             "area": area,
                             "responsavel": st.session_state.usuario,
+                            "anexo": anexo_path,
                             "data_cadastro": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                         }
                         if enviar_dados_para_planilha("Processo", novo_processo):
@@ -287,8 +375,8 @@ def main():
                             st.success("Processo cadastrado com sucesso!")
             
             # Exibição da lista de Processos cadastrados
+            st.subheader("Lista de Processos Cadastrados")
             if PROCESSOS:
-                st.subheader("Lista de Processos Cadastrados")
                 st.dataframe(pd.DataFrame(PROCESSOS))
             else:
                 st.info("Nenhum processo cadastrado ainda.")
@@ -427,7 +515,7 @@ def main():
                     else:
                         st.info("Nenhum dado encontrado com os filtros aplicados")
         
-        # ----------------- Aba Gerenciar Funcionários: Cadastro com Usuário/Senha -----------------
+        # ----------------- Aba Gerenciar Funcionários: Cadastro, Listagem e Exclusão -----------------
         elif escolha == "Gerenciar Funcionários":
             st.subheader("👥 Cadastro de Funcionários")
             with st.form("form_funcionario"):
@@ -473,12 +561,21 @@ def main():
                     funcionarios_visiveis = FUNCIONARIOS
                 if funcionarios_visiveis:
                     st.dataframe(pd.DataFrame(funcionarios_visiveis))
+                    if papel == "manager":
+                        func_excluir = st.selectbox("Selecione o Funcionário para exclusão", pd.DataFrame(funcionarios_visiveis)["nome"].tolist())
+                        if st.button("Excluir Funcionário"):
+                            FUNCIONARIOS = [f for f in FUNCIONARIOS if f.get("nome") != func_excluir]
+                            USERS.pop(func_excluir, None)
+                            if enviar_dados_para_planilha("Funcionario", {"nome": func_excluir, "excluir": True}):
+                                st.success("Funcionário excluído com sucesso!")
+                            else:
+                                st.error("Falha ao excluir funcionário.")
                 else:
                     st.info("Nenhum funcionário cadastrado para este escritório")
             else:
                 st.info("Nenhum funcionário cadastrado ainda")
         
-        # ----------------- Aba Gerenciar Escritórios (Owner) - Código Antigo -----------------
+        # ----------------- Aba Gerenciar Escritórios (Owner) -----------------
         elif escolha == "Gerenciar Escritórios" and papel == "owner":
             st.subheader("🏢 Gerenciamento de Escritórios")
             tab1, tab2, tab3 = st.tabs(["Cadastrar Escritório", "Lista de Escritórios", "Administradores"])

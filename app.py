@@ -21,12 +21,11 @@ DEEPSEEK_ENDPOINT = "https://api.deepseek.com/v1/chat/completions"
 GAS_WEB_APP_URL = "https://script.google.com/macros/s/AKfycbzx0HbjObfhgU4lqVFBI05neopT-rb5tqlGbJU19EguKq8LmmtzkTPtZjnMgCNmz8OtLw/exec"
 
 # Dados do sistema (usuários) – cada usuário possui "username" e "senha"
-# Inicializamos no st.session_state para persistência durante a sessão.
 if "USERS" not in st.session_state:
     st.session_state.USERS = {
-        "dono": {"username": "dono", "senha": "dono123", "papel": "owner"},
+        "dono": {"username": "dono", "senha": "dono123", "papel": "owner", "area": "Todas"},
         "gestor1": {"username": "gestor1", "senha": "gestor123", "papel": "manager", "escritorio": "Escritorio A", "area": "Todas"},
-        "adv1": {"username": "adv1", "senha": "adv123", "papel": "lawyer", "escritorio": "Escritorio A", "area": "Cível"}
+        "adv1": {"username": "adv1", "senha": "adv123", "papel": "lawyer", "escritorio": "Escritorio A", "area": "Criminal"}
     }
 
 # -------------------- Funções Auxiliares --------------------
@@ -69,7 +68,6 @@ def enviar_dados_para_planilha(tipo, dados):
         return False
 
 def login(usuario, senha):
-    # Busca no dicionário persistido em st.session_state.USERS
     users = st.session_state.get("USERS", {})
     for user in users.values():
         if user.get("username") == usuario and user.get("senha") == senha:
@@ -246,12 +244,17 @@ def main():
             with st.expander("🔍 Filtros", expanded=True):
                 col1, col2, col3 = st.columns(3)
                 with col1:
-                    filtro_area = st.selectbox("Área", ["Todas"] + list(set(p["area"] for p in PROCESSOS)))
+                    # Se o usuário tiver uma área específica, só será exibida essa opção
+                    if area_usuario and area_usuario != "Todas":
+                        filtro_area = st.selectbox("Área", [area_usuario])
+                    else:
+                        filtro_area = st.selectbox("Área", ["Todas"] + list(set(p["area"] for p in PROCESSOS)))
                 with col2:
                     filtro_status = st.selectbox("Status", ["Todos", "🔴 Atrasado", "🟡 Atenção", "🟢 Normal", "🔵 Movimentado"])
                 with col3:
                     filtro_escritorio = st.selectbox("Escritório", ["Todos"] + list(set(p["escritorio"] for p in PROCESSOS)))
             processos_visiveis = PROCESSOS.copy()
+            # Filtra com base na área do usuário, se aplicável
             if area_usuario and area_usuario != "Todas":
                 processos_visiveis = [p for p in processos_visiveis if p.get("area") == area_usuario]
             if filtro_area != "Todas":
@@ -305,349 +308,8 @@ def main():
                     except Exception:
                         indice_inicial = 2
                     novo_status = st.selectbox("Status", opcoes_status, index=indice_inicial)
-                    # Novo campo: cadastro do link do material complementar
+                    # Novo campo: link do material complementar
                     novo_link = st.text_input("Link do Material Complementar (opcional)", value=proc.get("link_material", ""))
                     if proc.get("link_material"):
                         st.markdown(f"[Baixar Material Complementar]({proc.get('link_material')})")
-                    col_edit, col_excluir = st.columns(2)
-                    with col_edit:
-                        if st.button("Atualizar Processo"):
-                            atualizacoes = {
-                                "cliente": novo_cliente,
-                                "descricao": nova_descricao,
-                                "status_manual": novo_status,
-                                "link_material": novo_link
-                            }
-                            if atualizar_processo(num_proc_editar, atualizacoes):
-                                st.success("Processo atualizado com sucesso!")
-                            else:
-                                st.error("Falha ao atualizar processo.")
-                    with col_excluir:
-                        if papel in ["manager", "owner"]:
-                            if st.button("Excluir Processo"):
-                                if excluir_processo(num_proc_editar):
-                                    PROCESSOS = [p for p in PROCESSOS if p.get("numero") != num_proc_editar]
-                                    st.success("Processo excluído com sucesso!")
-                                else:
-                                    st.error("Falha ao excluir processo.")
-                else:
-                    st.warning("Processo não encontrado.")
-        
-        # ----------------- Aba Processos: Cadastro de Novo Processo -----------------
-        elif escolha == "Processos":
-            st.subheader("📄 Cadastro de Processos")
-            with st.form("form_processo"):
-                cliente_nome = st.text_input("Cliente*")
-                numero_processo = st.text_input("Número do Processo*")
-                tipo_contrato = st.selectbox("Tipo de Contrato*", ["Fixo", "Por Ato", "Contingência"])
-                descricao = st.text_area("Descrição do Caso*")
-                col1, col2 = st.columns(2)
-                with col1:
-                    valor_total = st.number_input("Valor Total (R$)*", min_value=0.0, format="%.2f")
-                with col2:
-                    valor_movimentado = st.number_input("Valor Movimentado (R$)", min_value=0.0, format="%.2f")
-                prazo = st.date_input("Prazo Final*", value=datetime.date.today() + datetime.timedelta(days=30))
-                houve_movimentacao = st.checkbox("Houve movimentação recente?")
-                area = st.selectbox("Área Jurídica*", ["Cível", "Criminal", "Trabalhista", "Previdenciário", "Tributário"])
-                # Novo campo: cadastro do link do material complementar
-                link_material = st.text_input("Link do Material Complementar (opcional)")
-                if st.form_submit_button("Salvar Processo"):
-                    if not cliente_nome or not numero_processo or not descricao:
-                        st.warning("Campos obrigatórios (*) não preenchidos!")
-                    else:
-                        novo_processo = {
-                            "cliente": cliente_nome,
-                            "numero": numero_processo,
-                            "contrato": tipo_contrato,
-                            "descricao": descricao,
-                            "valor_total": valor_total,
-                            "valor_movimentado": valor_movimentado,
-                            "prazo": prazo.strftime("%Y-%m-%d"),
-                            "houve_movimentacao": houve_movimentacao,
-                            "escritorio": st.session_state.dados_usuario.get("escritorio", "Global"),
-                            "area": area,
-                            "responsavel": st.session_state.usuario,
-                            "link_material": link_material,
-                            "data_cadastro": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                        }
-                        if enviar_dados_para_planilha("Processo", novo_processo):
-                            PROCESSOS.append(novo_processo)
-                            st.success("Processo cadastrado com sucesso!")
-            st.subheader("Lista de Processos Cadastrados")
-            if PROCESSOS:
-                st.dataframe(pd.DataFrame(PROCESSOS))
-            else:
-                st.info("Nenhum processo cadastrado ainda.")
-        
-        # ----------------- Aba Clientes: Cadastro e Relatório -----------------
-        elif escolha == "Clientes":
-            st.subheader("👥 Cadastro de Clientes")
-            with st.form("form_cliente"):
-                nome = st.text_input("Nome Completo*", key="nome_cliente")
-                email = st.text_input("E-mail*")
-                telefone = st.text_input("Telefone*")
-                aniversario = st.date_input("Data de Nascimento")
-                escritorio = st.selectbox("Escritório", [e["nome"] for e in ESCRITORIOS] + ["Outro"])
-                observacoes = st.text_area("Observações")
-                if st.form_submit_button("Salvar Cliente"):
-                    if not nome or not email or not telefone:
-                        st.warning("Campos obrigatórios não preenchidos!")
-                    else:
-                        novo_cliente = {
-                            "nome": nome,
-                            "email": email,
-                            "telefone": telefone,
-                            "aniversario": aniversario.strftime("%Y-%m-%d"),
-                            "observacoes": observacoes,
-                            "cadastro": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                            "responsavel": st.session_state.usuario,
-                            "escritorio": escritorio
-                        }
-                        if enviar_dados_para_planilha("Cliente", novo_cliente):
-                            CLIENTES.append(novo_cliente)
-                            st.success("Cliente cadastrado com sucesso!")
-            st.subheader("Lista de Clientes e Relatório")
-            if CLIENTES:
-                st.dataframe(pd.DataFrame(CLIENTES))
-                if st.button("Exportar Relatório em PDF"):
-                    texto_relatorio = "\n".join([
-                        f'Nome: {c.get("nome", "")} | E-mail: {c.get("email", "")} | Telefone: {c.get("telefone", "")} | Cadastro: {c.get("cadastro", "")}'
-                        for c in CLIENTES
-                    ])
-                    pdf_file = exportar_pdf(texto_relatorio, nome_arquivo="relatorio_clientes")
-                    with open(pdf_file, "rb") as f:
-                        st.download_button("Baixar PDF", f, file_name=pdf_file)
-            else:
-                st.info("Nenhum cliente cadastrado.")
-        
-        # ----------------- Aba Históricos: Pesquisa de Histórico de Processos -----------------
-        elif escolha == "Históricos":
-            st.subheader("📜 Histórico de Movimentação de Processos")
-            num_proc = st.text_input("Digite o número do processo para pesquisar o histórico")
-            if num_proc:
-                historico = [h for h in HISTORICO_PETICOES if h.get("numero") == num_proc]
-                if historico:
-                    st.write(f"{len(historico)} registro(s) encontrado(s) para o processo {num_proc}:")
-                    for item in historico:
-                        with st.expander(f"{item['tipo']} - {item['data']} - {item.get('cliente_associado', '')}"):
-                            st.write(f"**Responsável:** {item['responsavel']}")
-                            st.write(f"**Escritório:** {item.get('escritorio', '')}")
-                            st.text_area("Conteúdo", value=item.get("conteudo", ""), key=item["data"], disabled=True)
-                else:
-                    st.info("Nenhum histórico encontrado para este processo.")
-        
-        # ----------------- Aba Relatórios: Processos e Escritórios -----------------
-        elif escolha == "Relatórios":
-            st.subheader("📊 Relatórios Personalizados")
-            with st.expander("🔍 Filtros Avançados", expanded=True):
-                with st.form("form_filtros"):
-                    col1, col2, col3 = st.columns(3)
-                    with col1:
-                        tipo_relatorio = st.selectbox("Tipo de Relatório*", ["Processos", "Escritórios"])
-                        if tipo_relatorio == "Processos":
-                            area_filtro = st.selectbox("Área", ["Todas"] + list(set(p["area"] for p in PROCESSOS)))
-                        else:
-                            area_filtro = None
-                        status_filtro = st.selectbox("Status", ["Todos", "🔴 Atrasado", "🟡 Atenção", "🟢 Normal", "🔵 Movimentado"])
-                    with col2:
-                        escritorio_filtro = st.selectbox("Escritório", ["Todos"] + list(set(p["escritorio"] for p in PROCESSOS)))
-                        responsavel_filtro = st.selectbox("Responsável", ["Todos"] + list(set(p["responsavel"] for p in PROCESSOS)))
-                    with col3:
-                        data_inicio = st.date_input("Data Início")
-                        data_fim = st.date_input("Data Fim")
-                        formato_exportacao = st.selectbox("Formato de Exportação", ["PDF", "DOCX", "CSV"])
-                    if st.form_submit_button("Aplicar Filtros"):
-                        filtros = {}
-                        if area_filtro and area_filtro != "Todas":
-                            filtros["area"] = area_filtro
-                        if escritorio_filtro != "Todos":
-                            filtros["escritorio"] = escritorio_filtro
-                        if responsavel_filtro != "Todos":
-                            filtros["responsavel"] = responsavel_filtro
-                        if data_inicio:
-                            filtros["data_inicio"] = data_inicio
-                        if data_fim:
-                            filtros["data_fim"] = data_fim
-                        
-                        if tipo_relatorio == "Processos":
-                            dados_filtrados = aplicar_filtros(PROCESSOS, filtros)
-                            if status_filtro != "Todos":
-                                dados_filtrados = [
-                                    p for p in dados_filtrados
-                                    if calcular_status_processo(converter_data(p.get("prazo")),
-                                                                p.get("houve_movimentacao", False)) == status_filtro
-                                ]
-                            st.session_state.dados_relatorio = dados_filtrados
-                            st.session_state.tipo_relatorio = "Processos"
-                        else:
-                            dados_filtrados = aplicar_filtros(ESCRITORIOS, filtros)
-                            st.session_state.dados_relatorio = dados_filtrados
-                            st.session_state.tipo_relatorio = "Escritórios"
-            if "dados_relatorio" in st.session_state and st.session_state.dados_relatorio:
-                st.write(f"{st.session_state.tipo_relatorio} encontrados: {len(st.session_state.dados_relatorio)}")
-                if st.button(f"Exportar Relatório ({formato_exportacao})"):
-                    if formato_exportacao == "PDF":
-                        if st.session_state.tipo_relatorio == "Processos":
-                            arquivo = gerar_relatorio_pdf(st.session_state.dados_relatorio)
-                        else:
-                            arquivo = exportar_pdf(str(st.session_state.dados_relatorio))
-                        with open(arquivo, "rb") as f:
-                            st.download_button("Baixar PDF", f, file_name=arquivo)
-                    elif formato_exportacao == "DOCX":
-                        if st.session_state.tipo_relatorio == "Processos":
-                            texto = "\n".join([f"{p['numero']} - {p['cliente']}" for p in st.session_state.dados_relatorio])
-                        else:
-                            texto = str(st.session_state.dados_relatorio)
-                        arquivo = exportar_docx(texto)
-                        with open(arquivo, "rb") as f:
-                            st.download_button("Baixar DOCX", f, file_name=arquivo)
-                    elif formato_exportacao == "CSV":
-                        df_export = pd.DataFrame(st.session_state.dados_relatorio)
-                        csv_bytes = df_export.to_csv(index=False).encode("utf-8")
-                        st.download_button(
-                            "Baixar CSV",
-                            data=csv_bytes,
-                            file_name=f"relatorio_{datetime.datetime.now().strftime('%Y%m%d')}.csv",
-                            mime="text/csv"
-                        )
-                        st.dataframe(st.session_state.dados_relatorio)
-                    else:
-                        st.info("Nenhum dado encontrado com os filtros aplicados")
-        
-        # ----------------- Aba Gerenciar Funcionários: Cadastro, Listagem e Exclusão -----------------
-        elif escolha == "Gerenciar Funcionários":
-            st.subheader("👥 Cadastro de Funcionários")
-            with st.form("form_funcionario"):
-                nome = st.text_input("Nome Completo*")
-                email = st.text_input("E-mail*")
-                telefone = st.text_input("Telefone*")
-                usuario_novo = st.text_input("Usuário*")
-                senha_novo = st.text_input("Senha*", type="password")
-                escritorio = st.selectbox("Escritório*", [e["nome"] for e in ESCRITORIOS])
-                area_atuacao = st.selectbox("Área de Atuação*", ["Cível", "Criminal", "Trabalhista", "Previdenciário", "Tributário"])
-                papel_func = st.selectbox("Papel no Sistema*", ["manager", "lawyer", "assistant"])
-                if st.form_submit_button("Cadastrar Funcionário"):
-                    if not nome or not email or not telefone or not usuario_novo or not senha_novo:
-                        st.warning("Campos obrigatórios não preenchidos!")
-                    else:
-                        novo_funcionario = {
-                            "nome": nome,
-                            "email": email,
-                            "telefone": telefone,
-                            "usuario": usuario_novo,
-                            "senha": senha_novo,
-                            "escritorio": escritorio,
-                            "area_atuacao": area_atuacao,
-                            "papel": papel_func,
-                            "data_cadastro": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                            "cadastrado_por": st.session_state.usuario
-                        }
-                        if enviar_dados_para_planilha("Funcionario", novo_funcionario):
-                            FUNCIONARIOS.append(novo_funcionario)
-                            st.session_state.USERS[usuario_novo] = {
-                                "username": usuario_novo,
-                                "senha": senha_novo,
-                                "papel": papel_func,
-                                "escritorio": escritorio,
-                                "area": area_atuacao
-                            }
-                            st.success("Funcionário cadastrado com sucesso!")
-            st.subheader("Lista de Funcionários")
-            if FUNCIONARIOS:
-                if papel == "manager":
-                    funcionarios_visiveis = [f for f in FUNCIONARIOS if f.get("escritorio") == escritorio_usuario]
-                else:
-                    funcionarios_visiveis = FUNCIONARIOS
-                if funcionarios_visiveis:
-                    st.dataframe(pd.DataFrame(funcionarios_visiveis))
-                    if papel == "manager":
-                        func_excluir = st.selectbox("Selecione o Funcionário para exclusão", pd.DataFrame(funcionarios_visiveis)["nome"].tolist())
-                        if st.button("Excluir Funcionário"):
-                            FUNCIONARIOS = [f for f in FUNCIONARIOS if f.get("nome") != func_excluir]
-                            st.session_state.USERS.pop(func_excluir, None)
-                            if enviar_dados_para_planilha("Funcionario", {"nome": func_excluir, "excluir": True}):
-                                st.success("Funcionário excluído com sucesso!")
-                            else:
-                                st.error("Falha ao excluir funcionário.")
-                else:
-                    st.info("Nenhum funcionário cadastrado para este escritório")
-            else:
-                st.info("Nenhum funcionário cadastrado ainda")
-        
-        # ----------------- Aba Gerenciar Escritórios (Owner) -----------------
-        elif escolha == "Gerenciar Escritórios" and papel == "owner":
-            st.subheader("🏢 Gerenciamento de Escritórios")
-            tab1, tab2, tab3 = st.tabs(["Cadastrar Escritório", "Lista de Escritórios", "Administradores"])
-            with tab1:
-                with st.form("form_escritorio"):
-                    st.subheader("Dados Cadastrais")
-                    nome = st.text_input("Nome do Escritório*")
-                    endereco = st.text_input("Endereço Completo*")
-                    telefone = st.text_input("Telefone*")
-                    email = st.text_input("E-mail*")
-                    cnpj = st.text_input("CNPJ*")
-                    st.subheader("Responsável Técnico")
-                    responsavel_tecnico = st.text_input("Nome do Responsável Técnico*")
-                    telefone_tecnico = st.text_input("Telefone do Responsável*")
-                    email_tecnico = st.text_input("E-mail do Responsável*")
-                    area_atuacao = st.multiselect("Áreas de Atuação", ["Cível", "Criminal", "Trabalhista", "Previdenciário", "Tributário"])
-                    if st.form_submit_button("Salvar Escritório"):
-                        campos_obrigatorios = [nome, endereco, telefone, email, cnpj, responsavel_tecnico, telefone_tecnico, email_tecnico]
-                        if not all(campos_obrigatorios):
-                            st.warning("Todos os campos obrigatórios (*) devem ser preenchidos!")
-                        else:
-                            novo_escritorio = {
-                                "nome": nome,
-                                "endereco": endereco,
-                                "telefone": telefone,
-                                "email": email,
-                                "cnpj": cnpj,
-                                "data_cadastro": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                                "responsavel": st.session_state.usuario,
-                                "responsavel_tecnico": responsavel_tecnico,
-                                "telefone_tecnico": telefone_tecnico,
-                                "email_tecnico": email_tecnico,
-                                "area_atuacao": ", ".join(area_atuacao)
-                            }
-                            if enviar_dados_para_planilha("Escritorio", novo_escritorio):
-                                ESCRITORIOS.append(novo_escritorio)
-                                st.success("Escritório cadastrado com sucesso!")
-            with tab2:
-                if ESCRITORIOS:
-                    st.dataframe(pd.DataFrame(ESCRITORIOS))
-                else:
-                    st.info("Nenhum escritório cadastrado ainda")
-            with tab3:
-                st.subheader("Administradores de Escritórios")
-                st.info("Funcionalidade em desenvolvimento - Aqui será possível cadastrar administradores para cada escritório")
-        
-        # ----------------- Aba Gerenciar Permissões (Owner) -----------------
-        elif escolha == "Gerenciar Permissões" and papel == "owner":
-            st.subheader("🔧 Gerenciar Permissões de Funcionários")
-            st.info("Altere as áreas/permissões dos funcionários:")
-            if FUNCIONARIOS:
-                df_func = pd.DataFrame(FUNCIONARIOS)
-                st.dataframe(df_func)
-                funcionario_selecionado = st.selectbox("Funcionário", df_func["nome"].tolist())
-                novas_areas = st.multiselect("Áreas Permitidas", ["Cível", "Criminal", "Trabalhista", "Previdenciário", "Tributário"])
-                if st.button("Atualizar Permissões"):
-                    atualizado = False
-                    for idx, func in enumerate(FUNCIONARIOS):
-                        if func.get("nome") == funcionario_selecionado:
-                            FUNCIONARIOS[idx]["area_atuacao"] = ", ".join(novas_areas)
-                            atualizado = True
-                            for key, user in st.session_state.USERS.items():
-                                if user.get("username") == funcionario_selecionado:
-                                    st.session_state.USERS[key]["area"] = ", ".join(novas_areas)
-                    if atualizado:
-                        if enviar_dados_para_planilha("Funcionario", {"nome": funcionario_selecionado, "area_atuacao": ", ".join(novas_areas), "atualizar": True}):
-                            st.success("Permissões atualizadas com sucesso!")
-                        else:
-                            st.error("Falha ao atualizar permissões.")
-            else:
-                st.info("Nenhum funcionário cadastrado.")
-        
-        # A aba "Petições IA" foi removida conforme solicitado.
-        
-if __name__ == '__main__':
-    main()
+                    col_edit, col

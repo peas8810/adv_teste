@@ -131,8 +131,9 @@ def gerar_peticao_ia(prompt, temperatura=0.7, max_tokens=2000, tentativas=3):
     """
     Gera uma petição utilizando a API DeepSeek com tratamento de timeout e tentativas.
     """
-    # Nova chave de API atualizada
+    # Configuração da chave de API e do endpoint conforme a documentação DeepSeek.
     DEEPSEEK_API_KEY = "sk-51096de13c2c4da6b81bb6574f515982"
+    DEEPSEEK_ENDPOINT = "https://api.deepseek.com/v1/chat/completions"
     
     headers = {
         "Content-Type": "application/json",
@@ -151,12 +152,13 @@ def gerar_peticao_ia(prompt, temperatura=0.7, max_tokens=2000, tentativas=3):
             }
         ],
         "temperature": temperatura,
-        "max_tokens": max_tokens
+        "max_tokens": max_tokens,
+        "stream": False  # Não utiliza streaming, conforme documentação.
     }
+    
     for tentativa in range(tentativas):
         try:
             start_time = time.time()
-            # Aumentamos o timeout para 60 segundos para dar mais tempo à API
             with httpx.Client(timeout=60) as client:
                 response = client.post(DEEPSEEK_ENDPOINT, headers=headers, json=payload)
             tempo_resposta = time.time() - start_time
@@ -182,6 +184,7 @@ def gerar_peticao_ia(prompt, temperatura=0.7, max_tokens=2000, tentativas=3):
                 raise Exception(f"Erro na requisição: {str(e)}")
             continue
     return "❌ Falha ao gerar petição após múltiplas tentativas"
+
 
     
 def exportar_pdf(texto, nome_arquivo="peticao"):

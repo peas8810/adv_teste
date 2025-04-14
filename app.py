@@ -266,11 +266,15 @@ def obter_processos_por_usuario(papel, escritorio=None, area=None):
 def main():
     st.title("Sistema Jurídico com DeepSeek AI")
     
-    # Carregar dados do Google Sheets com cache para melhorar performance
+   # Carregar dados do Google Sheets com cache para melhorar performance
     CLIENTES = carregar_dados_da_planilha("Cliente") or []
     PROCESSOS = carregar_dados_da_planilha("Processo") or []
     ESCRITORIOS = carregar_dados_da_planilha("Escritorio") or []
-    HISTORICO_PETICOES = carregar_dados_da_planilha("Historico_Peticao") or []
+    
+    HISTORICO_PETICOES = carregar_dados_da_planilha("Historico_Peticao")
+    if not isinstance(HISTORICO_PETICOES, list):
+        HISTORICO_PETICOES = []
+    
     FUNCIONARIOS = carregar_dados_da_planilha("Funcionario")
     if not isinstance(FUNCIONARIOS, list):
         FUNCIONARIOS = []

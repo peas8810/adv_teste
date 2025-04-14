@@ -21,7 +21,7 @@ DEEPSEEK_ENDPOINT = "https://api.deepseek.com/v1/chat/completions"
 GAS_WEB_APP_URL = "https://script.google.com/macros/s/AKfycbzx0HbjObfhgU4lqVFBI05neopT-rb5tqlGbJU19EguKq8LmmtzkTPtZjnMgCNmz8OtLw/exec"
 
 # Dados do sistema (usuários) – cada usuário possui "username" e "senha"
-# Para persistir novos cadastros, os usuários são armazenados no session_state
+# Inicializamos no st.session_state para persistência durante a sessão.
 if "USERS" not in st.session_state:
     st.session_state.USERS = {
         "dono": {"username": "dono", "senha": "dono123", "papel": "owner"},
@@ -69,6 +69,7 @@ def enviar_dados_para_planilha(tipo, dados):
         return False
 
 def login(usuario, senha):
+    # Busca no dicionário persistido em st.session_state.USERS
     users = st.session_state.get("USERS", {})
     for user in users.values():
         if user.get("username") == usuario and user.get("senha") == senha:
@@ -187,10 +188,10 @@ def excluir_processo(numero_processo):
 def main():
     st.title("Sistema Jurídico")
     
-    # Inicializa usuários persistidos
+    # Inicializa usuários persistidos na sessão, se ainda não houver
     if "USERS" not in st.session_state:
         st.session_state.USERS = USERS
-    
+
     # Carregamento dos dados
     CLIENTES = carregar_dados_da_planilha("Cliente") or []
     PROCESSOS = carregar_dados_da_planilha("Processo") or []
@@ -287,6 +288,7 @@ def main():
                 st.dataframe(df[['numero', 'cliente', 'area', 'prazo', 'responsavel', 'Status']])
             else:
                 st.info("Nenhum processo encontrado com os filtros aplicados")
+            
             st.subheader("✏️ Editar/Excluir Processo")
             num_proc_editar = st.text_input("Digite o número do processo para editar/excluir")
             if num_proc_editar:
@@ -303,7 +305,7 @@ def main():
                     except Exception:
                         indice_inicial = 2
                     novo_status = st.selectbox("Status", opcoes_status, index=indice_inicial)
-                    # Ao invés do upload, agora usamos um campo para cadastrar link do material complementar
+                    # Novo campo: cadastro do link do material complementar
                     novo_link = st.text_input("Link do Material Complementar (opcional)", value=proc.get("link_material", ""))
                     if proc.get("link_material"):
                         st.markdown(f"[Baixar Material Complementar]({proc.get('link_material')})")

@@ -271,7 +271,9 @@ def main():
     PROCESSOS = carregar_dados_da_planilha("Processo") or []
     ESCRITORIOS = carregar_dados_da_planilha("Escritorio") or []
     HISTORICO_PETICOES = carregar_dados_da_planilha("Historico_Peticao") or []
-    FUNCIONARIOS = carregar_dados_da_planilha("Funcionario") or []
+    FUNCIONARIOS = carregar_dados_da_planilha("Funcionario")
+    if not isinstance(FUNCIONARIOS, list):
+        FUNCIONARIOS = []
     
     # Sidebar: Login
     with st.sidebar:

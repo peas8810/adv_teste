@@ -260,7 +260,7 @@ def main():
     if not isinstance(FUNCIONARIOS, list):
         FUNCIONARIOS = []
     
-    # Sidebar: Login
+     # Sidebar: Login
     with st.sidebar:
         st.header("🔐 Login")
         usuario = st.text_input("Usuário")
@@ -275,12 +275,20 @@ def main():
             else:
                 st.error("Credenciais inválidas")
     
+    # Se o usuário estiver logado, exibe menu e opção de sair
     if "usuario" in st.session_state:
         papel = st.session_state.papel
         escritorio_usuario = st.session_state.dados_usuario.get("escritorio")
         area_usuario = st.session_state.dados_usuario.get("area")
         st.sidebar.success(f"Bem-vindo, {st.session_state.usuario} ({papel})")
-        
+        # Botão de logout
+        if st.sidebar.button("Sair"):
+            del st.session_state.usuario
+            del st.session_state.papel
+            del st.session_state.dados_usuario
+            st.sidebar.success("Você saiu do sistema!")
+            st.experimental_rerun()
+            
         # Menu Principal
         opcoes = ["Dashboard", "Clientes", "Processos", "Históricos", "Relatórios", "Gerenciar Funcionários"]
         if papel == "owner":

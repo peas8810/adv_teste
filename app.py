@@ -10,9 +10,9 @@ from dotenv import load_dotenv
 import os
 from fpdf import FPDF
 from docx import Document
+import tempfile
 
 # Imports para integração com Google Drive
-import tempfile
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
@@ -22,7 +22,7 @@ from googleapiclient.http import MediaFileUpload
 st.set_page_config(page_title="Sistema Jurídico", layout="wide")
 load_dotenv()
 
-# Configuração da API DeepSeek e Google Apps Script
+# Configuração da API DeepSeek e do Google Apps Script
 DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY", "sk-590cfea82f49426c94ff423d41a91f49")
 DEEPSEEK_ENDPOINT = "https://api.deepseek.com/v1/chat/completions"
 GAS_WEB_APP_URL = "https://script.google.com/macros/s/AKfycbzx0HbjObfhgU4lqVFBI05neopT-rb5tqlGbJU19EguKq8LmmtzkTPtZjnMgCNmz8OtLw/exec"
@@ -38,7 +38,7 @@ USERS = {
 def get_drive_service():
     """
     Cria e retorna um objeto de serviço da API Google Drive.
-    Usa OAuth2 e armazena as credenciais em 'token.json'.
+    Usa OAuth2 e armazena as credenciais em "token.json".
     """
     SCOPES = ['https://www.googleapis.com/auth/drive.file']
     client_config = {
@@ -58,7 +58,7 @@ def get_drive_service():
         if creds and creds.expired and creds.refresh_token:
             try:
                 creds.refresh(requests.Request())
-            except Exception as e:
+            except Exception:
                 creds = None
         if not creds:
             flow = InstalledAppFlow.from_client_config(client_config, SCOPES)
@@ -70,8 +70,8 @@ def get_drive_service():
 
 def upload_to_drive(file, nome_arquivo):
     """
-    Faz upload do arquivo para uma pasta específica no Google Drive.
-    A pasta de destino é definida pelo folder_id extraído da URL:
+    Faz upload do arquivo para a pasta do Google Drive.
+    A pasta destino é definida pelo folder_id extraído da URL:
     https://drive.google.com/drive/folders/1NZDsgzvP-st_g9etp6hyGorqgyCDOrCK?usp=sharing
     """
     try:
@@ -80,7 +80,6 @@ def upload_to_drive(file, nome_arquivo):
         temp_path = os.path.join(tempfile.gettempdir(), nome_arquivo)
         with open(temp_path, "wb") as f:
             f.write(file.getbuffer())
-        # Folder ID extraído da URL acima
         folder_id = "1NZDsgzvP-st_g9etp6hyGorqgyCDOrCK"
         file_metadata = {
             "name": nome_arquivo,
@@ -88,17 +87,13 @@ def upload_to_drive(file, nome_arquivo):
         }
         media = MediaFileUpload(temp_path, resumable=True)
         uploaded = service.files().create(body=file_metadata, media_body=media, fields="id").execute()
-        return uploaded.get("id")  # ou retorne uma URL se desejar
+        return uploaded.get("id")  # Retorna o ID do arquivo no Drive
     except Exception as e:
         st.error(f"Erro ao fazer upload para o Drive: {e}")
         return ""
 
 # -------------------- Outras Funções Auxiliares --------------------
 def converter_data(data_str):
-    """
-    Converte uma string de data no formato ISO para um objeto date.
-    Se não for possível, retorna a data de hoje.
-    """
     if not data_str:
         return datetime.date.today()
     try:
@@ -111,9 +106,6 @@ def converter_data(data_str):
 
 @st.cache_data(ttl=300, show_spinner=False)
 def carregar_dados_da_planilha(tipo, debug=False):
-    """
-    Carrega os dados da planilha para o tipo especificado.
-    """
     try:
         response = requests.get(GAS_WEB_APP_URL, params={"tipo": tipo}, timeout=10)
         response.raise_for_status()
@@ -126,9 +118,6 @@ def carregar_dados_da_planilha(tipo, debug=False):
         return []
 
 def enviar_dados_para_planilha(tipo, dados):
-    """
-    Envia os dados para a planilha via Google Apps Script.
-    """
     try:
         payload = {"tipo": tipo, **dados}
         with httpx.Client(timeout=10, follow_redirects=True) as client:
@@ -143,23 +132,12 @@ def enviar_dados_para_planilha(tipo, dados):
         return False
 
 def login(usuario, senha):
-    """
-    Autentica o usuário com base no dicionário USERS.
-    """
     for user in USERS.values():
         if user.get("username") == usuario and user.get("senha") == senha:
             return user
     return None
 
 def calcular_status_processo(data_prazo, houve_movimentacao):
-    """
-    Calcula o status do processo (mesma lógica antiga).
-    Retorna:
-      - "🔵 Movimentado" se houve movimentação;
-      - "🔴 Atrasado" se o prazo já passou;
-      - "🟡 Atenção" se faltam 10 ou menos dias;
-      - "🟢 Normal" caso contrário.
-    """
     hoje = datetime.date.today()
     dias_restantes = (data_prazo - hoje).days
     if houve_movimentacao:
@@ -172,9 +150,6 @@ def calcular_status_processo(data_prazo, houve_movimentacao):
         return "🟢 Normal"
 
 def consultar_movimentacoes_simples(numero_processo):
-    """
-    Consulta movimentações de um processo (simulação).
-    """
     url = f"https://esaj.tjsp.jus.br/cpopg/show.do?processo.codigo={numero_processo}"
     try:
         r = requests.get(url, timeout=10)
@@ -230,9 +205,6 @@ def gerar_relatorio_pdf(dados, nome_arquivo="relatorio"):
     return f"{nome_arquivo}.pdf"
 
 def aplicar_filtros(dados, filtros):
-    """
-    Aplica os filtros informados aos dados (para Processos e Escritórios).
-    """
     def extrair_data(r):
         data_str = r.get("data_cadastro") or r.get("cadastro")
         if data_str:
@@ -265,19 +237,11 @@ def aplicar_filtros(dados, filtros):
     return resultados
 
 def atualizar_processo(numero_processo, atualizacoes):
-    """
-    Atualiza um processo enviando as modificações para a planilha.
-    O payload deve incluir "atualizar": True.
-    Se a atualização incluir exclusão, deve conter "excluir": True.
-    """
     atualizacoes["numero"] = numero_processo
     atualizacoes["atualizar"] = True
     return enviar_dados_para_planilha("Processo", atualizacoes)
 
 def excluir_processo(numero_processo):
-    """
-    Exclui um processo enviando o payload com "excluir": True.
-    """
     payload = {"numero": numero_processo, "excluir": True}
     return enviar_dados_para_planilha("Processo", payload)
 
@@ -325,28 +289,113 @@ def main():
             opcoes.extend(["Gerenciar Funcionários"])
         escolha = st.sidebar.selectbox("Menu", opcoes)
         
-        # ----------------- Aba Processos: Cadastro e Listagem -----------------
-        if escolha == "Processos":
-            st.subheader("📄 Gestão de Processos")
-            
-            # Formulário de Cadastro de Processo
+        # ----------------- Aba Dashboard: Visualiza, Filtra, Edição e Exclusão de Processos -----------------
+        if escolha == "Dashboard":
+            st.subheader("📋 Painel de Controle de Processos")
+            with st.expander("🔍 Filtros", expanded=True):
+                col1, col2, col3 = st.columns(3)
+                with col1:
+                    filtro_area = st.selectbox("Área", ["Todas"] + list(set(p["area"] for p in PROCESSOS)))
+                with col2:
+                    filtro_status = st.selectbox("Status", ["Todos", "🔴 Atrasado", "🟡 Atenção", "🟢 Normal", "🔵 Movimentado"])
+                with col3:
+                    filtro_escritorio = st.selectbox("Escritório", ["Todos"] + list(set(p["escritorio"] for p in PROCESSOS)))
+            processos_visiveis = PROCESSOS.copy()
+            if area_usuario and area_usuario != "Todas":
+                processos_visiveis = [p for p in processos_visiveis if p.get("area") == area_usuario]
+            if filtro_area != "Todas":
+                processos_visiveis = [p for p in processos_visiveis if p.get("area") == filtro_area]
+            if filtro_escritorio != "Todos":
+                processos_visiveis = [p for p in processos_visiveis if p.get("escritorio") == filtro_escritorio]
+            if filtro_status != "Todos":
+                processos_visiveis = [p for p in processos_visiveis 
+                                        if calcular_status_processo(converter_data(p.get("prazo")),
+                                                                    p.get("houve_movimentacao", False)) == filtro_status]
+            st.subheader("📊 Visão Geral")
+            col1, col2, col3, col4 = st.columns(4)
+            with col1:
+                st.metric("Total Processos", len(processos_visiveis))
+            with col2:
+                st.metric("Atrasados", len([p for p in processos_visiveis 
+                                            if calcular_status_processo(converter_data(p.get("prazo")),
+                                                                        p.get("houve_movimentacao", False)) == "🔴 Atrasado"]))
+            with col3:
+                st.metric("Para Atenção", len([p for p in processos_visiveis 
+                                               if calcular_status_processo(converter_data(p.get("prazo")),
+                                                                           p.get("houve_movimentacao", False)) == "🟡 Atenção"]))
+            with col4:
+                st.metric("Movimentados", len([p for p in processos_visiveis if p.get("houve_movimentacao", False)]))
+            st.subheader("📋 Lista de Processos")
+            if processos_visiveis:
+                df = pd.DataFrame(processos_visiveis)
+                df['Status'] = df.apply(lambda row: calcular_status_processo(
+                                            converter_data(row.get("prazo")),
+                                            row.get("houve_movimentacao", False)), axis=1)
+                status_order = {"🔴 Atrasado": 0, "🟡 Atenção": 1, "🟢 Normal": 2, "🔵 Movimentado": 3}
+                df['Status_Order'] = df['Status'].map(status_order)
+                df = df.sort_values('Status_Order').drop('Status_Order', axis=1)
+                st.dataframe(df[['numero', 'cliente', 'area', 'prazo', 'responsavel', 'Status']])
+            else:
+                st.info("Nenhum processo encontrado com os filtros aplicados")
+            st.subheader("✏️ Editar/Excluir Processo")
+            num_proc_editar = st.text_input("Digite o número do processo para editar/excluir")
+            if num_proc_editar:
+                proc = next((p for p in PROCESSOS if p.get("numero") == num_proc_editar), None)
+                if proc:
+                    st.write("Edite os campos abaixo:")
+                    novo_cliente = st.text_input("Cliente", proc.get("cliente", ""))
+                    nova_descricao = st.text_area("Descrição", proc.get("descricao", ""))
+                    opcoes_status = ["🔴 Atrasado", "🟡 Atenção", "🟢 Normal", "🔵 Movimentado"]
+                    try:
+                        status_atual = calcular_status_processo(converter_data(proc.get("prazo")), proc.get("houve_movimentacao", False))
+                        indice_inicial = opcoes_status.index(status_atual)
+                    except Exception:
+                        indice_inicial = 2
+                    novo_status = st.selectbox("Status", opcoes_status, index=indice_inicial)
+                    novo_anexo = st.file_uploader("Novo Anexo (opcional)", type=["pdf", "docx", "jpg", "png"])
+                    col_edit, col_excluir = st.columns(2)
+                    with col_edit:
+                        if st.button("Atualizar Processo"):
+                            atualizacoes = {
+                                "cliente": novo_cliente,
+                                "descricao": nova_descricao,
+                                "status_manual": novo_status
+                            }
+                            if novo_anexo is not None:
+                                anexo_nome = upload_to_drive(novo_anexo, f"anexo_{num_proc_editar}_{novo_anexo.name}")
+                                atualizacoes["anexo"] = anexo_nome
+                            if atualizar_processo(num_proc_editar, atualizacoes):
+                                st.success("Processo atualizado com sucesso!")
+                            else:
+                                st.error("Falha ao atualizar processo.")
+                    with col_excluir:
+                        if papel in ["manager", "owner"]:
+                            if st.button("Excluir Processo"):
+                                if excluir_processo(num_proc_editar):
+                                    PROCESSOS = [p for p in PROCESSOS if p.get("numero") != num_proc_editar]
+                                    st.success("Processo excluído com sucesso!")
+                                else:
+                                    st.error("Falha ao excluir processo.")
+                else:
+                    st.warning("Processo não encontrado.")
+        
+        # ----------------- Aba Processos: Cadastro de Novo Processo -----------------
+        elif escolha == "Processos":
+            st.subheader("📄 Cadastro de Processos")
             with st.form("form_processo"):
                 cliente_nome = st.text_input("Cliente*")
                 numero_processo = st.text_input("Número do Processo*")
                 tipo_contrato = st.selectbox("Tipo de Contrato*", ["Fixo", "Por Ato", "Contingência"])
                 descricao = st.text_area("Descrição do Caso*")
-                
                 col1, col2 = st.columns(2)
                 with col1:
                     valor_total = st.number_input("Valor Total (R$)*", min_value=0.0, format="%.2f")
                 with col2:
                     valor_movimentado = st.number_input("Valor Movimentado (R$)", min_value=0.0, format="%.2f")
-                
                 prazo = st.date_input("Prazo Final*", value=datetime.date.today() + datetime.timedelta(days=30))
                 houve_movimentacao = st.checkbox("Houve movimentação recente?")
                 area = st.selectbox("Área Jurídica*", ["Cível", "Criminal", "Trabalhista", "Previdenciário", "Tributário"])
                 arquivo_proc = st.file_uploader("Anexar Documento (será enviado para o Drive)", type=["pdf", "docx", "jpg", "png"])
-                
                 if st.form_submit_button("Salvar Processo"):
                     if not cliente_nome or not numero_processo or not descricao:
                         st.warning("Campos obrigatórios (*) não preenchidos!")
@@ -373,8 +422,6 @@ def main():
                         if enviar_dados_para_planilha("Processo", novo_processo):
                             PROCESSOS.append(novo_processo)
                             st.success("Processo cadastrado com sucesso!")
-            
-            # Exibição da lista de Processos cadastrados
             st.subheader("Lista de Processos Cadastrados")
             if PROCESSOS:
                 st.dataframe(pd.DataFrame(PROCESSOS))
@@ -438,7 +485,7 @@ def main():
                 else:
                     st.info("Nenhum histórico encontrado para este processo.")
         
-        # ----------------- Aba Relatórios: Apenas Processos e Escritórios -----------------
+        # ----------------- Aba Relatórios: Processos e Escritórios -----------------
         elif escolha == "Relatórios":
             st.subheader("📊 Relatórios Personalizados")
             with st.expander("🔍 Filtros Avançados", expanded=True):
@@ -470,7 +517,6 @@ def main():
                             filtros["data_inicio"] = data_inicio
                         if data_fim:
                             filtros["data_fim"] = data_fim
-                        
                         if tipo_relatorio == "Processos":
                             dados_filtrados = aplicar_filtros(PROCESSOS, filtros)
                             if status_filtro != "Todos":
@@ -575,7 +621,7 @@ def main():
             else:
                 st.info("Nenhum funcionário cadastrado ainda")
         
-        # ----------------- Aba Gerenciar Escritórios (Owner) -----------------
+        # ----------------- Aba Gerenciar Escritórios (Owner) - Código Antigo -----------------
         elif escolha == "Gerenciar Escritórios" and papel == "owner":
             st.subheader("🏢 Gerenciamento de Escritórios")
             tab1, tab2, tab3 = st.tabs(["Cadastrar Escritório", "Lista de Escritórios", "Administradores"])

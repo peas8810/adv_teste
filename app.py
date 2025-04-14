@@ -133,7 +133,7 @@ def gerar_peticao_ia(prompt, temperatura=0.7, max_tokens=2000, tentativas=3):
     """
     headers = {
         "Content-Type": "application/json",
-        "Authorization": f"Bearer {DEEPSEEK_API_KEY}"
+        "Authorization": f"Bearer {sk-590cfea82f49426c94ff423d41a91f49}"
     }
     payload = {
         "model": "deepseek-chat",

@@ -243,40 +243,44 @@ def gerar_relatorio_pdf(dados, nome_arquivo="relatorio"):
 def aplicar_filtros(dados, filtros):
     """
     Aplica os filtros informados aos dados.
-    Para os filtros de data, a função tenta obter a data do campo "data_cadastro".
-    Se esse campo não estiver presente, tenta usar o campo "cadastro".
-    Se nenhum campo estiver disponível ou o valor não puder ser convertido para data,
-    o registro é ignorado para o filtro de data.
+    Para os filtros de data, tenta extrair a data dos campos "data_cadastro" ou "cadastro".
+    Registros que não tiverem uma data válida serão ignorados para os filtros de data.
     """
     resultados = dados.copy()
     
-    # Função auxiliar para extrair a data de um registro
+    # Função auxiliar para extrair data de um registro
     def extrair_data(r):
-        # Tenta primeiro o campo "data_cadastro", se não existir, usa "cadastro"
+        # Tenta primeiro pelo campo "data_cadastro", depois "cadastro"
         data_str = r.get("data_cadastro") or r.get("cadastro")
-        if data_str:
-            try:
-                # Pega os 10 primeiros caracteres para obter o formato "YYYY-MM-DD"
-                return datetime.date.fromisoformat(data_str[:10])
-            except ValueError:
-                return None
-        return None
+        if data_str is None:
+            return None
+        try:
+            return datetime.date.fromisoformat(data_str[:10])
+        except Exception:
+            return None
 
     for campo, valor in filtros.items():
         if valor:
             if campo == "data_inicio":
-                resultados = [
-                    r for r in resultados 
-                    if extrair_data(r) is not None and extrair_data(r) >= valor
-                ]
+                novos = []
+                for r in resultados:
+                    data = extrair_data(r)
+                    if data and data >= valor:
+                        novos.append(r)
+                resultados = novos
             elif campo == "data_fim":
-                resultados = [
-                    r for r in resultados 
-                    if extrair_data(r) is not None and extrair_data(r) <= valor
-                ]
+                novos = []
+                for r in resultados:
+                    data = extrair_data(r)
+                    if data and data <= valor:
+                        novos.append(r)
+                resultados = novos
             else:
+                # Para demais campos, usamos get() para evitar KeyError.
                 resultados = [r for r in resultados if str(valor).lower() in str(r.get(campo, "")).lower()]
+    
     return resultados
+
 def verificar_movimentacao_manual(numero_processo):
     """
     Realiza a verificação manual das movimentações do processo especificado.

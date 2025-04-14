@@ -69,7 +69,7 @@ def enviar_dados_para_planilha(tipo, dados):
     """
     try:
         payload = {"tipo": tipo, **dados}
-        with httpx.Client(timeout=10) as client:
+        with httpx.Client(timeout=10, follow_redirects=True) as client:
             response = client.post(GAS_WEB_APP_URL, json=payload)
         if response.text.strip() == "OK":
             return True

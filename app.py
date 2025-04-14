@@ -8,29 +8,44 @@ import pandas as pd
 from bs4 import BeautifulSoup
 from dotenv import load_dotenv
 import os
+from fpdf import FPDF
+from docx import Document
 
-# Configurações Iniciais
+# -------------------- Configurações Iniciais --------------------
 st.set_page_config(page_title="Sistema Jurídico", layout="wide")
 load_dotenv()
 
-# Configurações de API e Google Apps Script
-DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY", "sk-...")
+# Configuração da API DeepSeek e Google Apps Script
+DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY", "sk-4cd98d6c538f42f68bd820a6f3cc44c9")
 DEEPSEEK_ENDPOINT = "https://api.deepseek.com/v1/chat/completions"
 GAS_WEB_APP_URL = "https://script.google.com/macros/s/AKfycbzx0HbjObfhgU4lqVFBI05neopT-rb5tqlGbJU19EguKq8LmmtzkTPtZjnMgCNmz8OtLw/exec"
 
-# Dicionário de usuários
+# Dados do sistema (Usuários)
 USERS = {
     "dono": {"senha": "dono123", "papel": "owner"},
     "gestor1": {"senha": "gestor123", "papel": "manager", "escritorio": "Escritorio A"},
     "adv1": {"senha": "adv123", "papel": "lawyer", "escritorio": "Escritorio A", "area": "Cível"},
 }
 
-# -------------------- Funções Otimizadas --------------------
+# -------------------- Funções Auxiliares e Otimizadas --------------------
+
+def converter_prazo(prazo_str):
+    """
+    Converte uma string no formato ISO ("YYYY-MM-DD") para um objeto date.
+    Se o valor for nulo ou estiver em formato inválido, retorna a data de hoje.
+    """
+    if not prazo_str:
+        return datetime.date.today()
+    try:
+        return datetime.date.fromisoformat(prazo_str)
+    except ValueError:
+        st.warning(f"Formato de data inválido: {prazo_str}. Utilizando a data de hoje.")
+        return datetime.date.today()
 
 @st.cache_data(ttl=300, show_spinner=False)
 def carregar_dados_da_planilha(tipo, debug=False):
     """
-    Carrega e retorna os dados da planilha para o tipo especificado. 
+    Carrega e retorna os dados da planilha para o tipo especificado.
     Utiliza cache para evitar múltiplas requisições em um curto intervalo.
     """
     try:
@@ -40,10 +55,12 @@ def carregar_dados_da_planilha(tipo, debug=False):
             st.text(f"🔍 URL chamada: {response.url}")
             st.text(f"📄 Resposta bruta: {response.text[:500]}")
         return response.json()
-    except Exception as e:
-        st.error(f"❌ Erro ao carregar dados ({tipo}): {e}")
+    except json.JSONDecodeError:
+        st.error(f"❌ Resposta inválida para o tipo '{tipo}'. O servidor não retornou JSON válido.")
         return []
-
+    except Exception as e:
+        st.warning(f"⚠️ Erro ao carregar dados ({tipo}): {e}")
+        return []
 
 def enviar_dados_para_planilha(tipo, dados):
     """
@@ -63,26 +80,20 @@ def enviar_dados_para_planilha(tipo, dados):
         st.error(f"❌ Erro ao enviar dados ({tipo}): {e}")
         return False
 
-
-def converter_prazo(prazo_str):
-    """Converte uma string no formato ISO para objeto date."""
-    if not prazo_str:
-        return datetime.date.today()
-    try:
-        return datetime.date.fromisoformat(prazo_str)
-    except ValueError:
-        st.warning(f"Formato de data inválido: {prazo_str}. Utilizando data de hoje.")
-        return datetime.date.today()
-
-
 def login(usuario, senha):
-    """Autentica o usuário com base no dicionário USERS."""
+    """Autentica o usuário no sistema com base no dicionário USERS."""
     user = USERS.get(usuario)
     return user if user and user["senha"] == senha else None
 
-
 def calcular_status_processo(data_prazo, houve_movimentacao):
-    """Calcula e retorna o status do processo conforme prazo e movimentação."""
+    """
+    Calcula o status do processo com base na data final e se houve movimentação.
+    Retorna:
+      - "🔵 Movimentado" se houve movimentação;
+      - "🔴 Atrasado" se o prazo já passou;
+      - "🟡 Atenção" se faltam 10 ou menos dias;
+      - "🟢 Normal" caso contrário.
+    """
     hoje = datetime.date.today()
     dias_restantes = (data_prazo - hoje).days
     if houve_movimentacao:
@@ -94,10 +105,10 @@ def calcular_status_processo(data_prazo, houve_movimentacao):
     else:
         return "🟢 Normal"
 
-
 def consultar_movimentacoes_simples(numero_processo):
     """
-    Consulta movimentações simuladas para o número do processo informado.
+    Consulta movimentações processuais simuladas para o número do processo informado.
+    Retorna uma lista com até 5 movimentações ou uma mensagem caso não sejam encontradas.
     """
     url = f"https://esaj.tjsp.jus.br/cpopg/show.do?processo.codigo={numero_processo}"
     try:
@@ -109,106 +120,4 @@ def consultar_movimentacoes_simples(numero_processo):
     except Exception:
         return ["Erro ao consultar movimentações"]
 
-
-def gerar_peticao_ia(prompt, temperatura=0.7, max_tokens=2000, tentativas=3):
-    """
-    Gera uma petição utilizando a API DeepSeek com tratamento de tentativas e timeout.
-    """
-    headers = {
-        "Content-Type": "application/json",
-        "Authorization": f"Bearer {DEEPSEEK_API_KEY}"
-    }
-    payload = {
-        "model": "deepseek-chat",
-        "messages": [
-            {
-                "role": "system",
-                "content": "Você é um assistente jurídico especializado. Responda com linguagem técnica formal."
-            },
-            {"role": "user", "content": prompt}
-        ],
-        "temperature": temperatura,
-        "max_tokens": max_tokens
-    }
-    for tentativa in range(tentativas):
-        try:
-            start_time = time.time()
-            with httpx.Client(timeout=30) as client:
-                response = client.post(DEEPSEEK_ENDPOINT, headers=headers, json=payload)
-            tempo_resposta = time.time() - start_time
-            st.sidebar.metric("Tempo de resposta API", f"{tempo_resposta:.2f}s")
-            response.raise_for_status()
-            resposta_json = response.json()
-            if not resposta_json.get('choices'):
-                raise ValueError("Resposta incompleta")
-            return resposta_json['choices'][0]['message']['content']
-        except httpx.ReadTimeout:
-            if tentativa < tentativas - 1:
-                st.warning(f"Tentativa {tentativa + 1} falhou (timeout). Tentando novamente...")
-                continue
-            else:
-                raise Exception("Servidor demorou muito para responder.")
-        except Exception as e:
-            if tentativa == tentativas - 1:
-                raise Exception(f"Erro na requisição: {e}")
-            continue
-    return "❌ Falha ao gerar petição após múltiplas tentativas"
-
-
-# Outras funções (exportação, filtros, etc.) permanecem com lógicas similares,
-# mas podem também ser otimizadas com cache, se aplicável.
-
-# -------------------- Interface Principal --------------------
-def main():
-    st.title("Sistema Jurídico com DeepSeek AI")
-    
-    # Carregar dados com cache para melhorar performance
-    CLIENTES = carregar_dados_da_planilha("Cliente") or []
-    PROCESSOS = carregar_dados_da_planilha("Processo") or []
-    ESCRITORIOS = carregar_dados_da_planilha("Escritorio") or []
-    HISTORICO_PETICOES = carregar_dados_da_planilha("Historico_Peticao") or []
-    FUNCIONARIOS = carregar_dados_da_planilha("Funcionario") or []
-    
-    # Sidebar: Login
-    with st.sidebar:
-        st.header("🔐 Login")
-        usuario = st.text_input("Usuário")
-        senha = st.text_input("Senha", type="password")
-        if st.button("Entrar"):
-            user = login(usuario, senha)
-            if user:
-                st.session_state.usuario = usuario
-                st.session_state.papel = user["papel"]
-                st.session_state.dados_usuario = user
-                st.success("Login realizado com sucesso!")
-            else:
-                st.error("Credenciais inválidas")
-    
-    # Exibir conteúdo principal somente se o usuário estiver logado
-    if "usuario" in st.session_state:
-        # (A partir daqui, o restante da interface – dashboards, cadastros, consultas,
-        # geração de petições, relatórios, etc. – permanece com a lógica original,
-        # integrando as funções de envio e carregamento otimizadas.)
-        st.sidebar.success(f"Bem-vindo, {st.session_state.usuario} ({st.session_state.papel})")
-        # ... (demais módulos do sistema)
-        st.subheader("Exemplo: Cadastro de Cliente")
-        with st.form("form_cliente"):
-            nome = st.text_input("Nome Completo*")
-            email = st.text_input("E-mail*")
-            telefone = st.text_input("Telefone*")
-            if st.form_submit_button("Salvar Cliente"):
-                if nome and email and telefone:
-                    novo_cliente = {
-                        "nome": nome,
-                        "email": email,
-                        "telefone": telefone,
-                        "cadastro": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                        "responsavel": st.session_state.usuario
-                    }
-                    if enviar_dados_para_planilha("Cliente", novo_cliente):
-                        st.success("Cliente cadastrado e salvo na planilha!")
-                else:
-                    st.warning("Preencha os campos obrigatórios.")
-
-if __name__ == '__main__':
-    main()
+def gerar_peticao_ia(prompt, temperatura=0.7, max_tokens=2000_

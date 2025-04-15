@@ -630,7 +630,7 @@ def main():
                         if st.session_state.tipo_relatorio == "Processos":
                             arquivo = gerar_relatorio_pdf(st.session_state.dados_relatorio)
                         elif st.session_state.tipo_relatorio == "Leads":
-                            texto = "\n".join([f"Nome: {l.get('nome','')}, Contato: {l.get('contato','')}, E-mail: {l.get('email','')}, Data de Aniversário: {l.get('data_aniversario','')}" 
+                            texto = "\n".join([f"Nome: {l.get('nome','')}, Contato: {l.get('numero','')}, E-mail: {l.get('email','')}, Data de Aniversário: {l.get('data_aniversario','')}" 
                                                 for l in st.session_state.dados_relatorio])
                             arquivo = exportar_pdf(texto, nome_arquivo="relatorio_leads")
                         else:

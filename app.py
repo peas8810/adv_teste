@@ -505,15 +505,16 @@ def main():
                         st.warning("Preencha todos os campos obrigatórios!")
                     else:
                         novo_lead = {
-                            "nome": nome,
-                            "contato": contato,
-                            "email": email,
-                            "data_aniversario": data_aniversario.strftime("%Y-%m-%d"),
-                            "data_cadastro": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                        }
-                        if enviar_dados_para_planilha("Lead", novo_lead):
-                            LEADS.append(novo_lead)
-                            st.success("Lead cadastrado com sucesso!")
+                        "nome": nome,
+                        "contato": contato,
+                        "email": email,
+                        "data_aniversario": data_aniversario.strftime("%Y-%m-%d"),
+                        "origem": "lead",  # Campo adicional para identificar o registro como lead
+                        "data_cadastro": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                    }
+                    if enviar_dados_para_planilha("Cliente", novo_lead):  # Enviando como "Cliente"
+                        LEADS.append(novo_lead)
+                        st.success("Lead cadastrado com sucesso!")
             st.subheader("Lista de Leads")
             if LEADS:
                 df_leads = get_dataframe_with_cols(LEADS, ["nome", "contato", "email", "data_aniversario"])

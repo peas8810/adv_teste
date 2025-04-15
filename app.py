@@ -249,6 +249,7 @@ def main():
     if not isinstance(HISTORICO_PETICOES, list):
         HISTORICO_PETICOES = []
     FUNCIONARIOS = carregar_dados_da_planilha("Funcionario") or []
+    LEADS = carregar_dados_da_planilha("Lead") or []  # Nova aba de Leads
     
     #####################
     # Sidebar: Login e Logout
@@ -286,8 +287,8 @@ def main():
         # Se o usuário estiver vinculado a uma área específica, forçamos esse filtro
         area_fixa = area_usuario if (area_usuario and area_usuario != "Todas") else None
         
-        # Menu Principal
-        opcoes = ["Dashboard", "Clientes", "Processos", "Históricos", "Relatórios", "Gerenciar Funcionários"]
+        # Menu Principal (incluindo a nova opção "Gestão de Leads")
+        opcoes = ["Dashboard", "Clientes", "Gestão de Leads", "Processos", "Históricos", "Relatórios", "Gerenciar Funcionários"]
         # As abas de Escritórios e Permissões só aparecem para o "owner"
         if papel == "owner":
             opcoes.extend(["Gerenciar Escritórios", "Gerenciar Permissões"])
@@ -342,6 +343,24 @@ def main():
             col3.metric("Atenção", atencao)
             col4.metric("Movimentados", movimentados)
             col5.metric("Encerrados", encerrados)
+            
+            # Exibição dos aniversariantes do dia (baseado na aba Cliente)
+            hoje = datetime.date.today()
+            aniversariantes = []
+            for cliente in CLIENTES:
+                data_str = cliente.get("aniversario", "")
+                try:
+                    data_aniversario = datetime.datetime.strptime(data_str, "%Y-%m-%d").date()
+                    if data_aniversario.month == hoje.month and data_aniversario.day == hoje.day:
+                        aniversariantes.append(cliente)
+                except Exception:
+                    continue
+            st.markdown("### 🎂 Aniversariantes do Dia")
+            if aniversariantes:
+                for a in aniversariantes:
+                    st.write(f"{a.get('nome', 'N/A')} - {a.get('aniversario', '')}")
+            else:
+                st.info("Nenhum aniversariante para hoje.")
             
             # Gráfico de Pizza com as cores definidas
             if total > 0:
@@ -425,7 +444,7 @@ def main():
                                     st.error("Falha ao excluir processo.")
                 else:
                     st.warning("Processo não encontrado.")
-
+        
         # ------------------ Clientes ------------------ #
         elif escolha == "Clientes":
             st.subheader("👥 Cadastro de Clientes")
@@ -469,6 +488,35 @@ def main():
                         st.download_button("Baixar PDF", f, file_name=pdf_file)
             else:
                 st.info("Nenhum cliente cadastrado.")
+        
+        # ------------------ Gestão de Leads ------------------ #
+        elif escolha == "Gestão de Leads":
+            st.subheader("📇 Gestão de Leads")
+            with st.form("form_lead"):
+                nome = st.text_input("Nome*", key="nome_lead")
+                contato = st.text_input("Contato*")
+                email = st.text_input("E-mail*")
+                data_aniversario = st.date_input("Data de Aniversário")
+                if st.form_submit_button("Salvar Lead"):
+                    if not nome or not contato or not email:
+                        st.warning("Preencha todos os campos obrigatórios!")
+                    else:
+                        novo_lead = {
+                            "nome": nome,
+                            "contato": contato,
+                            "email": email,
+                            "data_aniversario": data_aniversario.strftime("%Y-%m-%d"),
+                            "data_cadastro": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                        }
+                        if enviar_dados_para_planilha("Lead", novo_lead):
+                            LEADS.append(novo_lead)
+                            st.success("Lead cadastrado com sucesso!")
+            st.subheader("Lista de Leads")
+            if LEADS:
+                df_leads = get_dataframe_with_cols(LEADS, ["nome", "contato", "email", "data_aniversario"])
+                st.dataframe(df_leads)
+            else:
+                st.info("Nenhum lead cadastrado.")
         
         # ------------------ Processos ------------------ #
         elif escolha == "Processos":
@@ -762,63 +810,7 @@ def main():
             with tab3:
                 st.subheader("Administradores de Escritórios")
                 st.info("Aqui será possível cadastrar advogados administradores para cada escritório (funcionalidade em desenvolvimento).")
-
-                 # ------------------ Aniversariantes do Dia ------------------ #
-        st.subheader("🎂 Aniversariantes do Dia")
-        aniversariantes_hoje = []
-        hoje_str = datetime.date.today().strftime("%m-%d")
-        for cliente in CLIENTES:
-            data_aniv = cliente.get("aniversario")
-            if data_aniv:
-                try:
-                    if isinstance(data_aniv, str):
-                        data_aniv = datetime.datetime.strptime(data_aniv[:10], "%Y-%m-%d").date()
-                    if data_aniv.strftime("%m-%d") == hoje_str:
-                        aniversariantes_hoje.append(cliente)
-                except:
-                    pass
-        if aniversariantes_hoje:
-            for c in aniversariantes_hoje:
-                st.markdown(f"- **{c['nome']}** | Email: {c.get('email', '')} | Telefone: {c.get('telefone', '')}")
-        else:
-            st.info("Nenhum aniversariante hoje.")
-
-        # ------------------ Gestão de Leads ------------------ #
-        if escolha == "Gestão de Leads":
-            st.subheader("📞 Gestão de Leads")
-            with st.form("form_lead"):
-                nome = st.text_input("Nome Completo*")
-                contato = st.text_input("Telefone ou WhatsApp*")
-                email = st.text_input("E-mail*")
-                aniversario = st.date_input("Data de Aniversário")
-                if st.form_submit_button("Salvar Lead"):
-                    if not nome or not contato or not email:
-                        st.warning("Preencha todos os campos obrigatórios!")
-                    else:
-                        novo_lead = {
-                            "nome": nome,
-                            "contato": contato,
-                            "email": email,
-                            "aniversario": aniversario.strftime("%Y-%m-%d"),
-                            "cadastro": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                        }
-                        if enviar_dados_para_planilha("Lead", novo_lead):
-                            st.success("Lead cadastrado com sucesso!")
-
-            st.subheader("🔎 Visualização de Leads")
-            LEADS = carregar_dados_da_planilha("Lead") or []
-            if LEADS:
-                df_leads = get_dataframe_with_cols(LEADS, ["nome", "contato", "email", "aniversario", "cadastro"])
-                st.dataframe(df_leads)
-            else:
-                st.info("Nenhum lead cadastrado ainda.")
-
-        # Menu lateral - inclui aba de Gestão de Leads
-        if papel == "owner":
-            opcoes.extend(["Gestão de Leads"])
-        elif papel == "manager":
-            opcoes.append("Gestão de Leads")
-
+        
         # ------------------ Gerenciar Permissões (Owner) ------------------ #
         elif escolha == "Gerenciar Permissões" and papel == "owner":
             st.subheader("🔧 Gerenciar Permissões de Funcionários")
@@ -831,9 +823,11 @@ def main():
                 if st.button("Atualizar Permissões"):
                     atualizado = False
                     for idx, func in enumerate(FUNCIONARIOS):
+                        # Verifica se o campo "nome" corresponde ao funcionário selecionado
                         if func.get("nome") == funcionario_selecionado:
                             FUNCIONARIOS[idx]["area"] = ", ".join(novas_areas)
                             atualizado = True
+                            # Atualiza no dicionário de usuários
                             for key, user in st.session_state.USERS.items():
                                 if user.get("username") == func.get("usuario"):
                                     st.session_state.USERS[key]["area"] = ", ".join(novas_areas)
@@ -848,10 +842,9 @@ def main():
                             st.error("Falha ao atualizar permissões.")
             else:
                 st.info("Nenhum funcionário cadastrado.")
-
+        
     else:
         st.info("Por favor, faça login para acessar o sistema.")
 
 if __name__ == '__main__':
     main()
-

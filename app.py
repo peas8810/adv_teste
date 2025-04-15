@@ -20,17 +20,9 @@ DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY", "sk-590cfea82f49426c94ff423d41a
 DEEPSEEK_ENDPOINT = "https://api.deepseek.com/v1/chat/completions"
 GAS_WEB_APP_URL = "https://script.google.com/macros/s/AKfycbzx0HbjObfhgU4lqVFBI05neopT-rb5tqlGbJU19EguKq8LmmtzkTPtZjnMgCNmz8OtLw/exec"
 
-# Dados do sistema (usuários) – cada usuário possui "username" e "senha"
-# Estes dados ficam persistidos durante a sessão via st.session_state.
-if "USERS" not in st.session_state:
-    st.session_state.USERS = {
-        "dono": {"username": "dono", "senha": "dono123", "papel": "owner"},
-        "gestor1": {"username": "gestor1", "senha": "gestor123", "papel": "manager", "escritorio": "Escritorio A", "area": "Todas"},
-        "adv1": {"username": "adv1", "senha": "adv123", "papel": "lawyer", "escritorio": "Escritorio A", "area": "Criminal"}
-    }
-
 # -------------------- Funções Auxiliares --------------------
 def converter_data(data_str):
+    """Converte uma string de data em formato ISO para um objeto date."""
     if not data_str:
         return datetime.date.today()
     try:
@@ -43,6 +35,7 @@ def converter_data(data_str):
 
 @st.cache_data(ttl=300, show_spinner=False)
 def carregar_dados_da_planilha(tipo, debug=False):
+    """Carrega os dados da planilha para um determinado tipo."""
     try:
         response = requests.get(GAS_WEB_APP_URL, params={"tipo": tipo}, timeout=10)
         response.raise_for_status()
@@ -55,6 +48,7 @@ def carregar_dados_da_planilha(tipo, debug=False):
         return []
 
 def enviar_dados_para_planilha(tipo, dados):
+    """Envia os dados para a planilha via Google Apps Script."""
     try:
         payload = {"tipo": tipo, **dados}
         with httpx.Client(timeout=10, follow_redirects=True) as client:
@@ -70,19 +64,27 @@ def enviar_dados_para_planilha(tipo, dados):
 
 def carregar_usuarios_da_planilha():
     """
-    Carrega os usuários (funcionários) da aba "Funcionario" da planilha.
-    Retorna um dicionário com chave 'username' para cada usuário.
+    Carrega os usuários da aba "Funcionario" da planilha.
+    Retorna um dicionário indexado pela chave 'usuario'.
+    Cada registro deverá conter as colunas:
+      - usuario
+      - senha
+      - nome
+      - papel
+      - escritorio
+      - area
+    Caso a planilha não retorne dados, é garantido o usuário "dono".
     """
     funcionarios = carregar_dados_da_planilha("Funcionario") or []
     users_dict = {}
-    # Se não houver dados, garante pelo menos o usuário "dono"
     if not funcionarios:
         users_dict["dono"] = {
             "username": "dono",
             "senha": "dono123",
             "papel": "owner",
             "escritorio": "Global",
-            "area": "Todas"
+            "area": "Todas",
+            "nome": "Dono"
         }
         return users_dict
     for f in funcionarios:
@@ -94,12 +96,15 @@ def carregar_usuarios_da_planilha():
             "senha": f.get("senha", ""),
             "papel": f.get("papel", "assistant"),
             "escritorio": f.get("escritorio", "Global"),
-            "area": f.get("area", "Todas")
+            "area": f.get("area", "Todas"),
+            # A coluna "nome" é lida; caso não exista, usa o próprio usuário
+            "nome": f.get("nome", user_key)
         }
         users_dict[user_key] = user_dict
     return users_dict
 
 def login(usuario, senha):
+    """Realiza a autenticação com base no dicionário de usuários persistido."""
     users = st.session_state.get("USERS", {})
     user = users.get(usuario)
     if user and user["senha"] == senha:
@@ -108,8 +113,8 @@ def login(usuario, senha):
 
 def calcular_status_processo(data_prazo, houve_movimentacao, encerrado=False):
     """
-    Calcula o status do processo. Se encerrado for True, retorna "⚫ Encerrado".
-    Caso contrário, utiliza a lógica padrão:
+    Calcula o status do processo.
+    Se 'encerrado' for True, retorna "⚫ Encerrado". Caso contrário:
       - "🔵 Movimentado" se houve movimentação;
       - "🔴 Atrasado" se o prazo já passou;
       - "🟡 Atenção" se faltam 10 ou menos dias;
@@ -129,6 +134,7 @@ def calcular_status_processo(data_prazo, houve_movimentacao, encerrado=False):
         return "🟢 Normal"
 
 def consultar_movimentacoes_simples(numero_processo):
+    """Consulta as movimentações de um processo (simulação)."""
     url = f"https://esaj.tjsp.jus.br/cpopg/show.do?processo.codigo={numero_processo}"
     try:
         r = requests.get(url, timeout=10)
@@ -143,6 +149,7 @@ def consultar_movimentacoes_simples(numero_processo):
         return ["Erro ao consultar movimentações"]
 
 def exportar_pdf(texto, nome_arquivo="relatorio"):
+    """Exporta o texto para um arquivo PDF."""
     pdf = FPDF()
     pdf.add_page()
     pdf.set_font("Arial", size=12)
@@ -151,12 +158,14 @@ def exportar_pdf(texto, nome_arquivo="relatorio"):
     return f"{nome_arquivo}.pdf"
 
 def exportar_docx(texto, nome_arquivo="relatorio"):
+    """Exporta o texto para um arquivo DOCX."""
     doc = Document()
     doc.add_paragraph(texto)
     doc.save(f"{nome_arquivo}.docx")
     return f"{nome_arquivo}.docx"
 
 def gerar_relatorio_pdf(dados, nome_arquivo="relatorio"):
+    """Gera um relatório em PDF a partir de dados fornecidos."""
     pdf = FPDF()
     pdf.add_page()
     pdf.set_font("Arial", size=12)
@@ -185,6 +194,7 @@ def gerar_relatorio_pdf(dados, nome_arquivo="relatorio"):
     return f"{nome_arquivo}.pdf"
 
 def aplicar_filtros(dados, filtros):
+    """Aplica filtros (por data e campos textuais) aos dados."""
     def extrair_data(r):
         data_str = r.get("data_cadastro") or r.get("cadastro")
         if data_str:
@@ -217,25 +227,24 @@ def aplicar_filtros(dados, filtros):
     return resultados
 
 def atualizar_processo(numero_processo, atualizacoes):
+    """Envia atualização de um processo à planilha."""
     atualizacoes["numero"] = numero_processo
     atualizacoes["atualizar"] = True
     return enviar_dados_para_planilha("Processo", atualizacoes)
 
 def excluir_processo(numero_processo):
+    """Envia solicitação para exclusão de um processo."""
     payload = {"numero": numero_processo, "excluir": True}
     return enviar_dados_para_planilha("Processo", payload)
 
-######################
-# Interface Principal
-######################
+# -------------------- Interface Principal --------------------
 def main():
     st.title("Sistema Jurídico")
     
-    # Carrega os usuários a partir da planilha "Funcionario" para persistência
-    if "USERS" not in st.session_state:
-        st.session_state.USERS = carregar_usuarios_da_planilha()
+    # Carrega os usuários a partir da planilha "Funcionario" e atualiza st.session_state.USERS
+    st.session_state.USERS = carregar_usuarios_da_planilha()
     
-    # Carregamento dos dados das demais abas
+    # Carregamento dos demais dados
     CLIENTES = carregar_dados_da_planilha("Cliente") or []
     PROCESSOS = carregar_dados_da_planilha("Processo") or []
     ESCRITORIOS = carregar_dados_da_planilha("Escritorio") or []
@@ -275,9 +284,9 @@ def main():
         papel = st.session_state.papel
         escritorio_usuario = st.session_state.dados_usuario.get("escritorio", "Global")
         area_usuario = st.session_state.dados_usuario.get("area", "Todas")
-        st.sidebar.success(f"Bem-vindo, {st.session_state.usuario} ({papel})")
+        st.sidebar.success(f"Bem-vindo, {st.session_state.dados_usuario.get('nome', st.session_state.usuario)} ({papel})")
         
-        # Se o usuário tem área específica (ex.: "Criminal"), forçamos este filtro
+        # Se o usuário tiver área fixa (por exemplo, "Criminal"), forçamos esse filtro
         if area_usuario and area_usuario != "Todas":
             area_fixa = area_usuario
         else:
@@ -313,7 +322,6 @@ def main():
             if filtro_escritorio != "Todos":
                 processos_visiveis = [p for p in processos_visiveis if p.get("escritorio") == filtro_escritorio]
             if filtro_status != "Todos":
-                # Para o status "Encerrado", verificamos o campo 'encerrado' (que deve ser True)
                 if filtro_status == "⚫ Encerrado":
                     processos_visiveis = [p for p in processos_visiveis if p.get("encerrado", False) is True]
                 else:
@@ -340,7 +348,6 @@ def main():
             st.subheader("📋 Lista de Processos")
             if processos_visiveis:
                 df = pd.DataFrame(processos_visiveis)
-                # Aplica a nova função de cálculo, incluindo a opção 'encerrado'
                 df['Status'] = df.apply(lambda row: calcular_status_processo(
                                             converter_data(row.get("prazo")),
                                             row.get("houve_movimentacao", False),
@@ -363,7 +370,7 @@ def main():
                     nova_descricao = st.text_area("Descrição", proc.get("descricao", ""))
                     opcoes_status = ["🔴 Atrasado", "🟡 Atenção", "🟢 Normal", "🔵 Movimentado", "⚫ Encerrado"]
                     try:
-                        status_atual = calcular_status_processo(converter_data(proc.get("prazo")), 
+                        status_atual = calcular_status_processo(converter_data(proc.get("prazo")),
                                                                 proc.get("houve_movimentacao", False),
                                                                 proc.get("encerrado", False))
                         indice_inicial = opcoes_status.index(status_atual)
@@ -416,9 +423,7 @@ def main():
                 if area_usuario and area_usuario != "Todas":
                     st.info(f"Área definida para seu perfil: {area_usuario}")
                     area = area_usuario
-                # Novo campo para cadastrar link do material complementar
                 link_material = st.text_input("Link do Material Complementar (opcional)")
-                # Novo campo para definir se o processo está encerrado (opcional)
                 encerrado = st.checkbox("Processo Encerrado?")
                 if st.form_submit_button("Salvar Processo"):
                     if not cliente_nome or not numero_processo or not descricao:
@@ -622,7 +627,7 @@ def main():
                         }
                         if enviar_dados_para_planilha("Funcionario", novo_funcionario):
                             st.success("Funcionário cadastrado com sucesso!")
-                            # Atualiza a lista de usuários persistida a partir do Google Sheets
+                            # Atualiza a lista de usuários a partir da planilha
                             st.session_state.USERS = carregar_usuarios_da_planilha()
             st.subheader("Lista de Funcionários")
             if FUNCIONARIOS:
@@ -708,7 +713,6 @@ def main():
                         if func.get("nome") == funcionario_selecionado:
                             FUNCIONARIOS[idx]["area"] = ", ".join(novas_areas)
                             atualizado = True
-                            # Atualiza também no dicionário persistente
                             for key, user in st.session_state.USERS.items():
                                 if user.get("username") == funcionario_selecionado:
                                     st.session_state.USERS[key]["area"] = ", ".join(novas_areas)
@@ -721,7 +725,7 @@ def main():
                 st.info("Nenhum funcionário cadastrado.")
         
         # A aba "Petições IA" foi removida conforme solicitado.
-    
+        
     else:
         st.info("Por favor, faça login para acessar o sistema.")
 

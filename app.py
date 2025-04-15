@@ -10,7 +10,7 @@ from dotenv import load_dotenv
 import os
 from fpdf import FPDF
 from docx import Document
-import plotly.express as px  # Certifique-se de instalar o plotly!
+import plotly.express as px
 
 # -------------------- Configurações Iniciais --------------------
 st.set_page_config(page_title="Sistema Jurídico", layout="wide")
@@ -21,7 +21,8 @@ DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY", "sk-590cfea82f49426c94ff423d41a
 DEEPSEEK_ENDPOINT = "https://api.deepseek.com/v1/chat/completions"
 GAS_WEB_APP_URL = "https://script.google.com/macros/s/AKfycbzx0HbjObfhgU4lqVFBI05neopT-rb5tqlGbJU19EguKq8LmmtzkTPtZjnMgCNmz8OtLw/exec"
 
-# Dados do sistema (usuários) – cada usuário possui "username" e "senha"
+# -------------------- Usuários Persistidos --------------------
+# Se não houver usuários na sessão, carrega os dados padrão.
 if "USERS" not in st.session_state:
     st.session_state.USERS = {
         "dono": {"username": "dono", "senha": "dono123", "papel": "owner"},
@@ -31,6 +32,7 @@ if "USERS" not in st.session_state:
 
 # -------------------- Funções Auxiliares --------------------
 def converter_data(data_str):
+    """Converte uma string de data em formato ISO para um objeto date."""
     if not data_str:
         return datetime.date.today()
     try:
@@ -43,6 +45,7 @@ def converter_data(data_str):
 
 @st.cache_data(ttl=300, show_spinner=False)
 def carregar_dados_da_planilha(tipo, debug=False):
+    """Carrega os dados da planilha para um determinado tipo."""
     try:
         response = requests.get(GAS_WEB_APP_URL, params={"tipo": tipo}, timeout=10)
         response.raise_for_status()
@@ -55,6 +58,7 @@ def carregar_dados_da_planilha(tipo, debug=False):
         return []
 
 def enviar_dados_para_planilha(tipo, dados):
+    """Envia dados para a planilha via Google Apps Script."""
     try:
         payload = {"tipo": tipo, **dados}
         with httpx.Client(timeout=10, follow_redirects=True) as client:
@@ -76,13 +80,7 @@ def carregar_usuarios_da_planilha():
     funcionarios = carregar_dados_da_planilha("Funcionario") or []
     users_dict = {}
     if not funcionarios:
-        users_dict["dono"] = {
-            "username": "dono",
-            "senha": "dono123",
-            "papel": "owner",
-            "escritorio": "Global",
-            "area": "Todas"
-        }
+        users_dict["dono"] = {"username": "dono", "senha": "dono123", "papel": "owner", "escritorio": "Global", "area": "Todas"}
         return users_dict
     for f in funcionarios:
         user_key = f.get("usuario")
@@ -99,6 +97,7 @@ def carregar_usuarios_da_planilha():
     return users_dict
 
 def login(usuario, senha):
+    """Realiza a autenticação com base no dicionário de usuários persistido."""
     users = st.session_state.get("USERS", {})
     user = users.get(usuario)
     if user and user["senha"] == senha:
@@ -129,6 +128,7 @@ def calcular_status_processo(data_prazo, houve_movimentacao, encerrado=False):
         return "🟢 Normal"
 
 def consultar_movimentacoes_simples(numero_processo):
+    """Consulta as movimentações de um processo (simulação)."""
     url = f"https://esaj.tjsp.jus.br/cpopg/show.do?processo.codigo={numero_processo}"
     try:
         r = requests.get(url, timeout=10)
@@ -143,6 +143,7 @@ def consultar_movimentacoes_simples(numero_processo):
         return ["Erro ao consultar movimentações"]
 
 def exportar_pdf(texto, nome_arquivo="relatorio"):
+    """Exporta um texto para PDF."""
     pdf = FPDF()
     pdf.add_page()
     pdf.set_font("Arial", size=12)
@@ -151,12 +152,14 @@ def exportar_pdf(texto, nome_arquivo="relatorio"):
     return f"{nome_arquivo}.pdf"
 
 def exportar_docx(texto, nome_arquivo="relatorio"):
+    """Exporta um texto para DOCX."""
     doc = Document()
     doc.add_paragraph(texto)
     doc.save(f"{nome_arquivo}.docx")
     return f"{nome_arquivo}.docx"
 
 def gerar_relatorio_pdf(dados, nome_arquivo="relatorio"):
+    """Gera um relatório em PDF a partir de uma lista de dicionários."""
     pdf = FPDF()
     pdf.add_page()
     pdf.set_font("Arial", size=12)
@@ -185,6 +188,7 @@ def gerar_relatorio_pdf(dados, nome_arquivo="relatorio"):
     return f"{nome_arquivo}.pdf"
 
 def aplicar_filtros(dados, filtros):
+    """Filtra uma lista de dicionários de acordo com os critérios informados."""
     def extrair_data(r):
         data_str = r.get("data_cadastro") or r.get("cadastro")
         if data_str:
@@ -217,15 +221,17 @@ def aplicar_filtros(dados, filtros):
     return resultados
 
 def atualizar_processo(numero_processo, atualizacoes):
+    """Atualiza um processo na planilha."""
     atualizacoes["numero"] = numero_processo
     atualizacoes["atualizar"] = True
     return enviar_dados_para_planilha("Processo", atualizacoes)
 
 def excluir_processo(numero_processo):
+    """Exclui um processo na planilha."""
     payload = {"numero": numero_processo, "excluir": True}
     return enviar_dados_para_planilha("Processo", payload)
 
-# Função auxiliar para garantir colunas no DataFrame
+# Função auxiliar para garantir que o DataFrame contenha as colunas necessárias
 def get_dataframe_with_cols(data, columns):
     df = pd.DataFrame(data)
     for col in columns:
@@ -239,7 +245,7 @@ def get_dataframe_with_cols(data, columns):
 def main():
     st.title("Sistema Jurídico")
     
-    # Atualiza os usuários a partir da planilha "Funcionario"
+    # Atualiza os usuários a partir da planilha "Funcionario" e armazena em st.session_state.USERS
     st.session_state.USERS = carregar_usuarios_da_planilha()
     
     # Carregamento dos dados das demais abas
@@ -276,7 +282,7 @@ def main():
             st.experimental_rerun()
     
     #####################
-    # Verifica se está logado
+    # Verifica se o usuário está logado
     #####################
     if "usuario" in st.session_state:
         papel = st.session_state.papel
@@ -284,7 +290,7 @@ def main():
         area_usuario = st.session_state.dados_usuario.get("area", "Todas")
         st.sidebar.success(f"Bem-vindo, {st.session_state.usuario} ({papel})")
         
-        # Se o usuário tiver área específica, forçamos este filtro
+        # Se o usuário estiver vinculado a uma área específica, forçamos esse filtro
         area_fixa = area_usuario if area_usuario and area_usuario != "Todas" else None
         
         # Menu Principal
@@ -296,7 +302,7 @@ def main():
         escolha = st.sidebar.selectbox("Menu", opcoes)
         
         #######################################
-        # Aba Dashboard: Visualização, Filtros e Gráfico
+        # Aba Dashboard: Visualização, Filtros e Gráfico de Pizza
         #######################################
         if escolha == "Dashboard":
             st.subheader("📋 Painel de Controle de Processos")
@@ -330,20 +336,32 @@ def main():
             atencao = len([p for p in processos_visiveis if calcular_status_processo(converter_data(p.get("prazo")), p.get("houve_movimentacao", False), p.get("encerrado", False)) == "🟡 Atenção"])
             movimentados = len([p for p in processos_visiveis if p.get("houve_movimentacao", False)])
             encerrados = len([p for p in processos_visiveis if p.get("encerrado", False) is True])
+            
             col1, col2, col3, col4, col5 = st.columns(5)
             col1.metric("Total", total)
             col2.metric("Atrasados", atrasados)
             col3.metric("Para Atenção", atencao)
             col4.metric("Movimentados", movimentados)
             col5.metric("Encerrados", encerrados)
-            # Gráfico de pizza
+            
+            # Criação do gráfico de pizza com cores definidas
             if total > 0:
                 fig = px.pie(
                     values=[atrasados, atencao, movimentados, encerrados, total - (atrasados + atencao + movimentados + encerrados)],
                     names=["Atrasados", "Para Atenção", "Movimentados", "Encerrados", "Outros"],
-                    title="Distribuição dos Processos"
+                    title="Distribuição dos Processos",
+                    color=["Atrasados", "Para Atenção", "Movimentados", "Encerrados", "Outros"],
+                    color_discrete_map={
+                        "Atrasados": "red",
+                        "Para Atenção": "yellow",
+                        "Movimentados": "blue",
+                        "Encerrados": "black",
+                        "Outros": "gray"
+                    }
                 )
+                fig.update_layout(legend_title_text="Status")
                 st.plotly_chart(fig)
+            
             st.subheader("📋 Lista de Processos")
             if processos_visiveis:
                 cols_proc = ["numero", "cliente", "area", "prazo", "responsavel", "link_material"]
@@ -356,8 +374,9 @@ def main():
                 status_order = {"🔴 Atrasado": 0, "🟡 Atenção": 1, "🟢 Normal": 2, "🔵 Movimentado": 3, "⚫ Encerrado": 4}
                 df_proc['Status_Order'] = df_proc['Status'].map(status_order)
                 df_proc = df_proc.sort_values('Status_Order').drop('Status_Order', axis=1)
+                # Converte o link do material em hiperlink clicável
                 if "link_material" in df_proc.columns:
-                    df_proc["link_material"] = df_proc["link_material"].apply(lambda x: f"[Abrir Material]({x})" if x.strip() != "" else "")
+                    df_proc["link_material"] = df_proc["link_material"].apply(lambda x: f"[Abrir Material]({x})" if isinstance(x, str) and x.strip() != "" else "")
                 st.dataframe(df_proc)
             else:
                 st.info("Nenhum processo encontrado com os filtros aplicados")
@@ -508,7 +527,8 @@ def main():
                 status_order = {"🔴 Atrasado": 0, "🟡 Atenção": 1, "🟢 Normal": 2, "🔵 Movimentado": 3, "⚫ Encerrado": 4}
                 df_proc['Status_Order'] = df_proc['Status'].map(status_order)
                 df_proc = df_proc.sort_values('Status_Order').drop('Status_Order', axis=1)
-                df_proc["link_material"] = df_proc["link_material"].apply(lambda x: f"[Abrir Material]({x})" if x.strip() != "" else "")
+                # Converte o link em hiperlink (se houver)
+                df_proc["link_material"] = df_proc["link_material"].apply(lambda x: f"[Abrir Material]({x})" if isinstance(x, str) and x.strip() != "" else "")
                 st.dataframe(df_proc)
             else:
                 st.info("Nenhum processo cadastrado ainda.")
@@ -527,8 +547,8 @@ def main():
                             st.write(f"**Escritório:** {item.get('escritorio', '')}")
                             st.text_area("Conteúdo", value=item.get("conteudo", ""), key=item["data"], disabled=True)
                 else:
-                    st.info("Nenhum histórico encontrado para este processo.\n\nPara consultar o site do TJMG, veja abaixo:")
-                    st.components.v1.iframe("https://www.tjmg.jus.br/", height=600)
+                    st.info("Nenhum histórico encontrado para este processo.\n\nPara consultar o TJMG, veja abaixo:")
+                    st.components.v1.iframe("https://www.tjmg.jus.br/portal-tjmg/processos/andamento-processual/", height=600)
         
         # ----------------- Aba Relatórios: Processos e Escritórios -----------------
         elif escolha == "Relatórios":
@@ -744,6 +764,7 @@ def main():
                     atualizado = False
                     for idx, func in enumerate(FUNCIONARIOS):
                         if func.get("nome") == funcionario_selecionado:
+                            # Atualiza o campo "area" que controla o acesso aos dados (filtros, relatórios etc.)
                             FUNCIONARIOS[idx]["area"] = ", ".join(novas_areas)
                             atualizado = True
                             for key, user in st.session_state.USERS.items():

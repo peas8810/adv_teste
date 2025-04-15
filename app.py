@@ -10,7 +10,7 @@ from dotenv import load_dotenv
 import os
 from fpdf import FPDF
 from docx import Document
-import plotly.express as px
+import plotly.express as px  # Certifique-se de instalar o plotly!
 
 # -------------------- Configurações Iniciais --------------------
 st.set_page_config(page_title="Sistema Jurídico", layout="wide")
@@ -21,7 +21,7 @@ DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY", "sk-590cfea82f49426c94ff423d41a
 DEEPSEEK_ENDPOINT = "https://api.deepseek.com/v1/chat/completions"
 GAS_WEB_APP_URL = "https://script.google.com/macros/s/AKfycbzx0HbjObfhgU4lqVFBI05neopT-rb5tqlGbJU19EguKq8LmmtzkTPtZjnMgCNmz8OtLw/exec"
 
-# Se os usuários não foram carregados previamente na sessão, define valores padrão.
+# Dados do sistema (usuários) – cada usuário possui "username" e "senha"
 if "USERS" not in st.session_state:
     st.session_state.USERS = {
         "dono": {"username": "dono", "senha": "dono123", "papel": "owner"},
@@ -31,7 +31,6 @@ if "USERS" not in st.session_state:
 
 # -------------------- Funções Auxiliares --------------------
 def converter_data(data_str):
-    """Converte uma string de data (ISO) para um objeto date."""
     if not data_str:
         return datetime.date.today()
     try:
@@ -44,7 +43,6 @@ def converter_data(data_str):
 
 @st.cache_data(ttl=300, show_spinner=False)
 def carregar_dados_da_planilha(tipo, debug=False):
-    """Carrega os dados da planilha para o tipo especificado."""
     try:
         response = requests.get(GAS_WEB_APP_URL, params={"tipo": tipo}, timeout=10)
         response.raise_for_status()
@@ -57,7 +55,6 @@ def carregar_dados_da_planilha(tipo, debug=False):
         return []
 
 def enviar_dados_para_planilha(tipo, dados):
-    """Envia os dados para a planilha via Google Apps Script."""
     try:
         payload = {"tipo": tipo, **dados}
         with httpx.Client(timeout=10, follow_redirects=True) as client:
@@ -78,25 +75,30 @@ def carregar_usuarios_da_planilha():
     """
     funcionarios = carregar_dados_da_planilha("Funcionario") or []
     users_dict = {}
+    if not funcionarios:
+        users_dict["dono"] = {
+            "username": "dono",
+            "senha": "dono123",
+            "papel": "owner",
+            "escritorio": "Global",
+            "area": "Todas"
+        }
+        return users_dict
     for f in funcionarios:
         user_key = f.get("usuario")
         if not user_key:
             continue
-        # Preenche o dicionário com as informações relevantes
-        users_dict[user_key] = {
+        user_dict = {
             "username": user_key,
             "senha": f.get("senha", ""),
             "papel": f.get("papel", "assistant"),
             "escritorio": f.get("escritorio", "Global"),
-            "area": f.get("area", "Todas"),
-            "nome": f.get("nome", user_key)
+            "area": f.get("area", "Todas")
         }
-    if "dono" not in users_dict:
-        users_dict["dono"] = {"username": "dono", "senha": "dono123", "papel": "owner", "escritorio": "Global", "area": "Todas", "nome": "Dono"}
+        users_dict[user_key] = user_dict
     return users_dict
 
 def login(usuario, senha):
-    """Realiza a autenticação com base nos usuários persistidos."""
     users = st.session_state.get("USERS", {})
     user = users.get(usuario)
     if user and user["senha"] == senha:
@@ -127,7 +129,6 @@ def calcular_status_processo(data_prazo, houve_movimentacao, encerrado=False):
         return "🟢 Normal"
 
 def consultar_movimentacoes_simples(numero_processo):
-    """Consulta (simulação) as movimentações de um processo."""
     url = f"https://esaj.tjsp.jus.br/cpopg/show.do?processo.codigo={numero_processo}"
     try:
         r = requests.get(url, timeout=10)
@@ -142,7 +143,6 @@ def consultar_movimentacoes_simples(numero_processo):
         return ["Erro ao consultar movimentações"]
 
 def exportar_pdf(texto, nome_arquivo="relatorio"):
-    """Gera e salva um arquivo PDF com o texto fornecido."""
     pdf = FPDF()
     pdf.add_page()
     pdf.set_font("Arial", size=12)
@@ -151,14 +151,12 @@ def exportar_pdf(texto, nome_arquivo="relatorio"):
     return f"{nome_arquivo}.pdf"
 
 def exportar_docx(texto, nome_arquivo="relatorio"):
-    """Gera e salva um arquivo DOCX com o texto fornecido."""
     doc = Document()
     doc.add_paragraph(texto)
     doc.save(f"{nome_arquivo}.docx")
     return f"{nome_arquivo}.docx"
 
 def gerar_relatorio_pdf(dados, nome_arquivo="relatorio"):
-    """Gera um relatório em PDF com os dados fornecidos."""
     pdf = FPDF()
     pdf.add_page()
     pdf.set_font("Arial", size=12)
@@ -187,7 +185,6 @@ def gerar_relatorio_pdf(dados, nome_arquivo="relatorio"):
     return f"{nome_arquivo}.pdf"
 
 def aplicar_filtros(dados, filtros):
-    """Aplica os filtros nos dados conforme especificado."""
     def extrair_data(r):
         data_str = r.get("data_cadastro") or r.get("cadastro")
         if data_str:
@@ -228,7 +225,7 @@ def excluir_processo(numero_processo):
     payload = {"numero": numero_processo, "excluir": True}
     return enviar_dados_para_planilha("Processo", payload)
 
-# Função auxiliar para gerar DataFrame com colunas garantidas
+# Função auxiliar para garantir colunas no DataFrame
 def get_dataframe_with_cols(data, columns):
     df = pd.DataFrame(data)
     for col in columns:
@@ -254,9 +251,9 @@ def main():
         HISTORICO_PETICOES = []
     FUNCIONARIOS = carregar_dados_da_planilha("Funcionario") or []
     
-    ##############################
+    #####################
     # Sidebar: Login e Logout
-    ##############################
+    #####################
     with st.sidebar:
         st.header("🔐 Login")
         usuario_input = st.text_input("Usuário")
@@ -278,16 +275,16 @@ def main():
             st.sidebar.success("Você saiu do sistema!")
             st.experimental_rerun()
     
-    ##############################
+    #####################
     # Verifica se está logado
-    ##############################
+    #####################
     if "usuario" in st.session_state:
         papel = st.session_state.papel
         escritorio_usuario = st.session_state.dados_usuario.get("escritorio", "Global")
         area_usuario = st.session_state.dados_usuario.get("area", "Todas")
         st.sidebar.success(f"Bem-vindo, {st.session_state.usuario} ({papel})")
         
-        # Se o usuário tiver área específica (ex.: "Criminal"), forçamos esse filtro
+        # Se o usuário tiver área específica, forçamos este filtro
         area_fixa = area_usuario if area_usuario and area_usuario != "Todas" else None
         
         # Menu Principal
@@ -323,10 +320,10 @@ def main():
                 if filtro_status == "⚫ Encerrado":
                     processos_visiveis = [p for p in processos_visiveis if p.get("encerrado", False) is True]
                 else:
-                    processos_visiveis = [p for p in processos_visiveis if calcular_status_processo(
-                        converter_data(p.get("prazo")),
-                        p.get("houve_movimentacao", False),
-                        p.get("encerrado", False)) == filtro_status]
+                    processos_visiveis = [p for p in processos_visiveis 
+                                           if calcular_status_processo(converter_data(p.get("prazo")), 
+                                                                       p.get("houve_movimentacao", False),
+                                                                       p.get("encerrado", False)) == filtro_status]
             st.subheader("📊 Visão Geral")
             total = len(processos_visiveis)
             atrasados = len([p for p in processos_visiveis if calcular_status_processo(converter_data(p.get("prazo")), p.get("houve_movimentacao", False), p.get("encerrado", False)) == "🔴 Atrasado"])
@@ -349,21 +346,19 @@ def main():
                 st.plotly_chart(fig)
             st.subheader("📋 Lista de Processos")
             if processos_visiveis:
-                # Para evitar KeyError, garantimos as colunas essenciais
-                cols_exibicao = ["numero", "cliente", "area", "prazo", "responsavel", "link_material"]
-                df = get_dataframe_with_cols(processos_visiveis, cols_exibicao)
-                df['Status'] = df.apply(lambda row: calcular_status_processo(
-                                            converter_data(row.get("prazo")),
-                                            row.get("houve_movimentacao", False),
-                                            row.get("encerrado", False)
-                                        ), axis=1)
+                cols_proc = ["numero", "cliente", "area", "prazo", "responsavel", "link_material"]
+                df_proc = get_dataframe_with_cols(processos_visiveis, cols_proc)
+                df_proc['Status'] = df_proc.apply(lambda row: calcular_status_processo(
+                                                converter_data(row.get("prazo")),
+                                                row.get("houve_movimentacao", False),
+                                                row.get("encerrado", False)
+                                            ), axis=1)
                 status_order = {"🔴 Atrasado": 0, "🟡 Atenção": 1, "🟢 Normal": 2, "🔵 Movimentado": 3, "⚫ Encerrado": 4}
-                df['Status_Order'] = df['Status'].map(status_order)
-                df = df.sort_values('Status_Order').drop('Status_Order', axis=1)
-                # Se o link do material complementar existir, converte para hiperlink
-                if "link_material" in df.columns:
-                    df["link_material"] = df["link_material"].apply(lambda x: f"[Abrir Material]({x})" if x.strip() != "" else "")
-                st.dataframe(df)
+                df_proc['Status_Order'] = df_proc['Status'].map(status_order)
+                df_proc = df_proc.sort_values('Status_Order').drop('Status_Order', axis=1)
+                if "link_material" in df_proc.columns:
+                    df_proc["link_material"] = df_proc["link_material"].apply(lambda x: f"[Abrir Material]({x})" if x.strip() != "" else "")
+                st.dataframe(df_proc)
             else:
                 st.info("Nenhum processo encontrado com os filtros aplicados")
             
@@ -763,7 +758,7 @@ def main():
                 st.info("Nenhum funcionário cadastrado.")
         
         # A aba "Petições IA" foi removida conforme solicitado.
-        
+    
     else:
         st.info("Por favor, faça login para acessar o sistema.")
 

@@ -226,6 +226,9 @@ def excluir_processo(numero_processo):
 
 # Função auxiliar para garantir que o DataFrame tenha as colunas desejadas
 def get_dataframe_with_cols(data, columns):
+    # Se data for um dicionário, converte para uma lista com um único elemento
+    if isinstance(data, dict):
+        data = [data]
     df = pd.DataFrame(data)
     for col in columns:
         if col not in df.columns:

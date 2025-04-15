@@ -473,7 +473,7 @@ def main():
                     csv_bytes = df_leads.to_csv(index=False).encode("utf-8")
                     st.download_button("Baixar Excel", data=csv_bytes, file_name="leads.csv", mime="text/csv")
                 with col_pdf:
-                    texto_leads = "\n".join([f"Nome: {l.get('nome','')}, Contato: {l.get('contato','')}, E-mail: {l.get('email','')}, Data de Aniversário: {l.get('data_aniversario','')}"
+                    texto_leads = "\n".join([f"Nome: {l.get('nome','')}, Contato: {l.get('numero','')}, E-mail: {l.get('email','')}, Data de Aniversário: {l.get('data_aniversario','')}"
                                               for l in LEADS])
                     pdf_file = exportar_pdf(texto_leads, nome_arquivo="relatorio_leads")
                     with open(pdf_file, "rb") as f:

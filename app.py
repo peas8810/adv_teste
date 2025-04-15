@@ -254,7 +254,7 @@ def main():
             st.experimental_rerun()
     
     #####################
-    # Se o usuário está logado
+    # Interface: Se o usuário está logado
     #####################
     if "usuario" in st.session_state:
         papel = st.session_state.papel
@@ -263,7 +263,7 @@ def main():
         st.sidebar.success(f"Bem-vindo, {st.session_state.usuario} ({papel})")
         area_fixa = area_usuario if (area_usuario and area_usuario != "Todas") else None
         
-        # Menu Principal (incluindo "Gestão de Leads")
+        # Menu Principal (incluindo a opção "Gestão de Leads")
         opcoes = ["Dashboard", "Clientes", "Gestão de Leads", "Processos", "Históricos", "Relatórios", "Gerenciar Funcionários"]
         if papel == "owner":
             opcoes.extend(["Gerenciar Escritórios", "Gerenciar Permissões"])
@@ -292,22 +292,20 @@ def main():
                 if filtro_status == "⚫ Encerrado":
                     processos_visiveis = [p for p in processos_visiveis if p.get("encerrado", False)]
                 else:
-                    processos_visiveis = [
-                        p for p in processos_visiveis 
-                        if calcular_status_processo(
-                            converter_data(p.get("prazo")),
-                            p.get("houve_movimentacao", False),
-                            p.get("encerrado", False)
-                        ) == filtro_status
-                    ]
+                    processos_visiveis = [p for p in processos_visiveis if calcular_status_processo(
+                        converter_data(p.get("prazo")),
+                        p.get("houve_movimentacao", False),
+                        p.get("encerrado", False)) == filtro_status]
             st.subheader("📊 Visão Geral")
             total = len(processos_visiveis)
-            atrasados = len([p for p in processos_visiveis if calcular_status_processo(converter_data(p.get("prazo")),
-                                                                                      p.get("houve_movimentacao", False),
-                                                                                      p.get("encerrado", False)) == "🔴 Atrasado"])
-            atencao = len([p for p in processos_visiveis if calcular_status_processo(converter_data(p.get("prazo")),
-                                                                                    p.get("houve_movimentacao", False),
-                                                                                    p.get("encerrado", False)) == "🟡 Atenção"])
+            atrasados = len([p for p in processos_visiveis if calcular_status_processo(
+                converter_data(p.get("prazo")),
+                p.get("houve_movimentacao", False),
+                p.get("encerrado", False)) == "🔴 Atrasado"])
+            atencao = len([p for p in processos_visiveis if calcular_status_processo(
+                converter_data(p.get("prazo")),
+                p.get("houve_movimentacao", False),
+                p.get("encerrado", False)) == "🟡 Atenção"])
             movimentados = len([p for p in processos_visiveis if p.get("houve_movimentacao", False)])
             encerrados = len([p for p in processos_visiveis if p.get("encerrado", False) is True])
             col1, col2, col3, col4, col5 = st.columns(5)
@@ -349,8 +347,7 @@ def main():
                 df_proc['Status'] = df_proc.apply(lambda row: calcular_status_processo(
                     converter_data(row.get("prazo")),
                     row.get("houve_movimentacao", False),
-                    row.get("encerrado", False)
-                ), axis=1)
+                    row.get("encerrado", False)), axis=1)
                 status_order = {"🔴 Atrasado": 0, "🟡 Atenção": 1, "🟢 Normal": 2, "🔵 Movimentado": 3, "⚫ Encerrado": 4}
                 df_proc['Status_Order'] = df_proc['Status'].map(status_order)
                 df_proc = df_proc.sort_values('Status_Order').drop('Status_Order', axis=1)
@@ -374,8 +371,7 @@ def main():
                         status_atual = calcular_status_processo(
                             converter_data(processo_alvo.get("prazo")),
                             processo_alvo.get("houve_movimentacao", False),
-                            processo_alvo.get("encerrado", False)
-                        )
+                            processo_alvo.get("encerrado", False))
                         indice_inicial = opcoes_status.index(status_atual)
                     except Exception:
                         indice_inicial = 2
@@ -386,7 +382,8 @@ def main():
                     col_ed, col_exc = st.columns(2)
                     with col_ed:
                         if st.button("Atualizar Processo"):
-                            atualizacoes = {"cliente": novo_cliente, "descricao": nova_descricao, "status_manual": novo_status, "link_material": novo_link}
+                            atualizacoes = {"cliente": novo_cliente, "descricao": nova_descricao,
+                                            "status_manual": novo_status, "link_material": novo_link}
                             if atualizar_processo(num_proc_edit, atualizacoes):
                                 st.success("Processo atualizado com sucesso!")
                             else:
@@ -430,7 +427,8 @@ def main():
                 df_cliente = get_dataframe_with_cols(CLIENTES, ["nome", "email", "telefone", "endereco", "cadastro"])
                 st.dataframe(df_cliente)
                 if st.button("Exportar Relatório em PDF"):
-                    texto_relatorio = "\n".join([f'Nome: {c.get("nome", "")} | E-mail: {c.get("email", "")} | Telefone: {c.get("telefone", "")} | Endereço: {c.get("endereco", "")} | Cadastro: {c.get("cadastro", "")}' for c in CLIENTES])
+                    texto_relatorio = "\n".join([f'Nome: {c.get("nome", "")} | E-mail: {c.get("email", "")} | Telefone: {c.get("telefone", "")} | Endereço: {c.get("endereco", "")} | Cadastro: {c.get("cadastro", "")}'
+                                                for c in CLIENTES])
                     pdf_file = exportar_pdf(texto_relatorio, nome_arquivo="relatorio_clientes")
                     with open(pdf_file, "rb") as f:
                         st.download_button("Baixar PDF", f, file_name=pdf_file)
@@ -449,6 +447,7 @@ def main():
                     if not nome or not contato or not email:
                         st.warning("Preencha todos os campos obrigatórios!")
                     else:
+                        # Cria o dicionário com os campos esperados na aba "Lead"
                         novo_lead = {"nome": nome,
                                      "contato": contato,
                                      "email": email,
@@ -465,7 +464,8 @@ def main():
                     csv_bytes = df_leads.to_csv(index=False).encode("utf-8")
                     st.download_button("Baixar Excel", data=csv_bytes, file_name="leads.csv", mime="text/csv")
                 with col_pdf:
-                    texto_leads = "\n".join([f"Nome: {l.get('nome','')}, Contato: {l.get('contato','')}, E-mail: {l.get('email','')}, Data de Aniversário: {l.get('data_aniversario','')}" for l in LEADS])
+                    texto_leads = "\n".join([f"Nome: {l.get('nome','')}, Contato: {l.get('contato','')}, E-mail: {l.get('email','')}, Data de Aniversário: {l.get('data_aniversario','')}" 
+                                              for l in (LEADS if isinstance(LEADS, list) else [LEADS])])
                     pdf_file = exportar_pdf(texto_leads, nome_arquivo="relatorio_leads")
                     with open(pdf_file, "rb") as f:
                         st.download_button("Baixar PDF", f, file_name=pdf_file)
@@ -523,13 +523,13 @@ def main():
                 df_proc['Status'] = df_proc.apply(lambda row: calcular_status_processo(
                     converter_data(row.get("prazo")),
                     row.get("houve_movimentacao", False),
-                    row.get("encerrado", False)
-                ), axis=1)
+                    row.get("encerrado", False)), axis=1)
                 status_order = {"🔴 Atrasado": 0, "🟡 Atenção": 1, "🟢 Normal": 2, "🔵 Movimentado": 3, "⚫ Encerrado": 4}
                 df_proc['Status_Order'] = df_proc['Status'].map(status_order)
                 df_proc = df_proc.sort_values('Status_Order').drop('Status_Order', axis=1)
                 if "link_material" in df_proc.columns:
-                    df_proc["link_material"] = df_proc["link_material"].apply(lambda x: f"[Abrir Material]({x})" if isinstance(x, str) and x.strip() != "" else "")
+                    df_proc["link_material"] = df_proc["link_material"].apply(
+                        lambda x: f"[Abrir Material]({x})" if isinstance(x, str) and x.strip() != "" else "")
                 st.dataframe(df_proc)
             else:
                 st.info("Nenhum processo cadastrado ainda.")
@@ -567,7 +567,7 @@ def main():
                 with st.form("form_filtros"):
                     col1, col2, col3 = st.columns(3)
                     with col1:
-                        # Agora inclui a opção "Leads"
+                        # Inclui a opção "Leads"
                         tipo_relatorio = st.selectbox("Tipo de Relatório*", ["Processos", "Escritórios", "Leads"])
                         if tipo_relatorio == "Processos":
                             if area_usuario and area_usuario != "Todas":
@@ -584,13 +584,11 @@ def main():
                     with col3:
                         data_inicio = st.date_input("Data Início")
                         data_fim = st.date_input("Data Fim")
-                        # Inclui TXT entre as opções de formatação
                         formato_exportacao = st.selectbox("Formato de Exportação", ["PDF", "DOCX", "CSV", "TXT"])
-                    
                     if st.form_submit_button("Aplicar Filtros"):
                         if tipo_relatorio == "Processos":
-                            filtros = {"area": area_filtro, "escritorio": escritorio_filtro, "responsavel": responsavel_filtro,
-                                       "data_inicio": data_inicio, "data_fim": data_fim}
+                            filtros = {"area": area_filtro, "escritorio": escritorio_filtro, 
+                                       "responsavel": responsavel_filtro, "data_inicio": data_inicio, "data_fim": data_fim}
                             dados_filtrados = aplicar_filtros(PROCESSOS, filtros)
                             if status_filtro != "Todos":
                                 if status_filtro == "⚫ Encerrado":
@@ -641,10 +639,13 @@ def main():
                         st.download_button("Baixar CSV", data=csv_bytes, file_name=f"relatorio_{datetime.datetime.now().strftime('%Y%m%d')}.csv", mime="text/csv")
                         st.dataframe(st.session_state.dados_relatorio)
                     elif formato_exportacao == "TXT":
-                        # Nova opção: exportar relatório de Leads em TXT
                         if st.session_state.tipo_relatorio == "Leads":
-                            texto = "\n".join([f"Nome: {l.get('nome','')}, Contato: {l.get('contato','')}, E-mail: {l.get('email','')}, Data de Aniversário: {l.get('data_aniversario','')}"
-                                                for l in st.session_state.dados_relatorio])
+                            # Garante que os dados estejam em formato de lista de dicionários
+                            leads_data = st.session_state.dados_relatorio
+                            if not isinstance(leads_data, list):
+                                leads_data = [leads_data]
+                            texto = "\n".join([f"Nome: {l.get('nome','')}, Contato: {l.get('contato','')}, E-mail: {l.get('email','')}, Data de Aniversário: {l.get('data_aniversario','')}" 
+                                                for l in leads_data])
                             st.download_button("Baixar TXT", data=texto, file_name="relatorio_leads.txt", mime="text/plain")
                         else:
                             st.info("A opção TXT está disponível apenas para o relatório de Leads.")

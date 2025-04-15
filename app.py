@@ -554,7 +554,7 @@ def main():
                         # Montamos o dicionário que será enviado para a aba "Lead"
                         novo_lead = {
                             "nome": nome,
-                            "var_contato": contato,
+                            "numero": contato,
                             "tipo_email": email,
                             "data_aniversario": data_aniversario.strftime("%Y-%m-%d"),
                             "origem": "lead",  # se desejar manter esse campo
@@ -569,7 +569,7 @@ def main():
             st.subheader("Lista de Leads")
             if LEADS:
                 # Ajuste as colunas conforme a aba "Lead" no seu Google Sheet
-                df_leads = get_dataframe_with_cols(LEADS, ["nome", "contato", "email", "data_aniversario", "origem", "data_cadastro"])
+                df_leads = get_dataframe_with_cols(LEADS, ["nome", "numero", "email", "data_aniversario", "origem", "data_cadastro"])
                 st.dataframe(df_leads)
             else:
                 st.info("Nenhum lead cadastrado.")

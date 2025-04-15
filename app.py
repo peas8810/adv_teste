@@ -21,8 +21,7 @@ DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY", "sk-590cfea82f49426c94ff423d41a
 DEEPSEEK_ENDPOINT = "https://api.deepseek.com/v1/chat/completions"
 GAS_WEB_APP_URL = "https://script.google.com/macros/s/AKfycbzx0HbjObfhgU4lqVFBI05neopT-rb5tqlGbJU19EguKq8LmmtzkTPtZjnMgCNmz8OtLw/exec"
 
-# Dados do sistema (usuários)
-# Esses dados serão atualizados a partir da aba "Funcionario" do Google Sheets
+# Se os usuários não foram carregados previamente na sessão, define valores padrão.
 if "USERS" not in st.session_state:
     st.session_state.USERS = {
         "dono": {"username": "dono", "senha": "dono123", "papel": "owner"},
@@ -32,7 +31,7 @@ if "USERS" not in st.session_state:
 
 # -------------------- Funções Auxiliares --------------------
 def converter_data(data_str):
-    """Converte uma string em formato ISO para um objeto date."""
+    """Converte uma string de data (ISO) para um objeto date."""
     if not data_str:
         return datetime.date.today()
     try:
@@ -58,7 +57,7 @@ def carregar_dados_da_planilha(tipo, debug=False):
         return []
 
 def enviar_dados_para_planilha(tipo, dados):
-    """Envia dados para a planilha via Google Apps Script."""
+    """Envia os dados para a planilha via Google Apps Script."""
     try:
         payload = {"tipo": tipo, **dados}
         with httpx.Client(timeout=10, follow_redirects=True) as client:
@@ -75,8 +74,7 @@ def enviar_dados_para_planilha(tipo, dados):
 def carregar_usuarios_da_planilha():
     """
     Carrega os usuários da aba "Funcionario" da planilha.
-    Retorna um dicionário indexado pela chave "usuario" (conforme a planilha).
-    Se não houver dados, garante o usuário 'dono'.
+    Retorna um dicionário indexado pela chave "usuario".
     """
     funcionarios = carregar_dados_da_planilha("Funcionario") or []
     users_dict = {}
@@ -84,7 +82,7 @@ def carregar_usuarios_da_planilha():
         user_key = f.get("usuario")
         if not user_key:
             continue
-        # Use a coluna "nome" se existir para exibir
+        # Preenche o dicionário com as informações relevantes
         users_dict[user_key] = {
             "username": user_key,
             "senha": f.get("senha", ""),
@@ -93,20 +91,12 @@ def carregar_usuarios_da_planilha():
             "area": f.get("area", "Todas"),
             "nome": f.get("nome", user_key)
         }
-    # Garante o usuário "dono"
     if "dono" not in users_dict:
-        users_dict["dono"] = {
-            "username": "dono",
-            "senha": "dono123",
-            "papel": "owner",
-            "escritorio": "Global",
-            "area": "Todas",
-            "nome": "Dono"
-        }
+        users_dict["dono"] = {"username": "dono", "senha": "dono123", "papel": "owner", "escritorio": "Global", "area": "Todas", "nome": "Dono"}
     return users_dict
 
 def login(usuario, senha):
-    """Realiza a autenticação com base no dicionário de usuários persistido."""
+    """Realiza a autenticação com base nos usuários persistidos."""
     users = st.session_state.get("USERS", {})
     user = users.get(usuario)
     if user and user["senha"] == senha:
@@ -116,7 +106,7 @@ def login(usuario, senha):
 def calcular_status_processo(data_prazo, houve_movimentacao, encerrado=False):
     """
     Calcula o status do processo.
-    Se o processo estiver encerrado, retorna "⚫ Encerrado".  
+    Se encerrado for True, retorna "⚫ Encerrado".  
     Caso contrário, utiliza a lógica:
       - "🔵 Movimentado" se houve movimentação;
       - "🔴 Atrasado" se o prazo passou;
@@ -137,7 +127,7 @@ def calcular_status_processo(data_prazo, houve_movimentacao, encerrado=False):
         return "🟢 Normal"
 
 def consultar_movimentacoes_simples(numero_processo):
-    """Consulta as movimentações de um processo (simulação)."""
+    """Consulta (simulação) as movimentações de um processo."""
     url = f"https://esaj.tjsp.jus.br/cpopg/show.do?processo.codigo={numero_processo}"
     try:
         r = requests.get(url, timeout=10)
@@ -152,7 +142,7 @@ def consultar_movimentacoes_simples(numero_processo):
         return ["Erro ao consultar movimentações"]
 
 def exportar_pdf(texto, nome_arquivo="relatorio"):
-    """Exporta o texto para PDF."""
+    """Gera e salva um arquivo PDF com o texto fornecido."""
     pdf = FPDF()
     pdf.add_page()
     pdf.set_font("Arial", size=12)
@@ -161,14 +151,14 @@ def exportar_pdf(texto, nome_arquivo="relatorio"):
     return f"{nome_arquivo}.pdf"
 
 def exportar_docx(texto, nome_arquivo="relatorio"):
-    """Exporta o texto para DOCX."""
+    """Gera e salva um arquivo DOCX com o texto fornecido."""
     doc = Document()
     doc.add_paragraph(texto)
     doc.save(f"{nome_arquivo}.docx")
     return f"{nome_arquivo}.docx"
 
 def gerar_relatorio_pdf(dados, nome_arquivo="relatorio"):
-    """Gera relatório de processos em PDF."""
+    """Gera um relatório em PDF com os dados fornecidos."""
     pdf = FPDF()
     pdf.add_page()
     pdf.set_font("Arial", size=12)
@@ -197,7 +187,7 @@ def gerar_relatorio_pdf(dados, nome_arquivo="relatorio"):
     return f"{nome_arquivo}.pdf"
 
 def aplicar_filtros(dados, filtros):
-    """Aplica os filtros aos dados (Processos, Escritórios)."""
+    """Aplica os filtros nos dados conforme especificado."""
     def extrair_data(r):
         data_str = r.get("data_cadastro") or r.get("cadastro")
         if data_str:
@@ -238,6 +228,14 @@ def excluir_processo(numero_processo):
     payload = {"numero": numero_processo, "excluir": True}
     return enviar_dados_para_planilha("Processo", payload)
 
+# Função auxiliar para gerar DataFrame com colunas garantidas
+def get_dataframe_with_cols(data, columns):
+    df = pd.DataFrame(data)
+    for col in columns:
+        if col not in df.columns:
+            df[col] = ""
+    return df[columns]
+
 ##############################
 # Interface Principal
 ##############################
@@ -247,7 +245,7 @@ def main():
     # Atualiza os usuários a partir da planilha "Funcionario"
     st.session_state.USERS = carregar_usuarios_da_planilha()
     
-    # Carregamento dos dados
+    # Carregamento dos dados das demais abas
     CLIENTES = carregar_dados_da_planilha("Cliente") or []
     PROCESSOS = carregar_dados_da_planilha("Processo") or []
     ESCRITORIOS = carregar_dados_da_planilha("Escritorio") or []
@@ -261,18 +259,18 @@ def main():
     ##############################
     with st.sidebar:
         st.header("🔐 Login")
-        usuario = st.text_input("Usuário")
-        senha = st.text_input("Senha", type="password")
+        usuario_input = st.text_input("Usuário")
+        senha_input = st.text_input("Senha", type="password")
         if st.button("Entrar"):
-            user = login(usuario, senha)
+            user = login(usuario_input, senha_input)
             if user:
-                st.session_state.usuario = usuario
+                st.session_state.usuario = usuario_input
                 st.session_state.papel = user["papel"]
                 st.session_state.dados_usuario = user
                 st.success("Login realizado com sucesso!")
             else:
                 st.error("Credenciais inválidas")
-                
+    
     if "usuario" in st.session_state:
         if st.sidebar.button("Sair"):
             for key in ["usuario", "papel", "dados_usuario"]:
@@ -289,7 +287,7 @@ def main():
         area_usuario = st.session_state.dados_usuario.get("area", "Todas")
         st.sidebar.success(f"Bem-vindo, {st.session_state.usuario} ({papel})")
         
-        # Se o usuário tiver área específica, forçamos esse filtro
+        # Se o usuário tiver área específica (ex.: "Criminal"), forçamos esse filtro
         area_fixa = area_usuario if area_usuario and area_usuario != "Todas" else None
         
         # Menu Principal
@@ -300,9 +298,9 @@ def main():
             opcoes.extend(["Gerenciar Funcionários"])
         escolha = st.sidebar.selectbox("Menu", opcoes)
         
-        #############################################
+        #######################################
         # Aba Dashboard: Visualização, Filtros e Gráfico
-        #############################################
+        #######################################
         if escolha == "Dashboard":
             st.subheader("📋 Painel de Controle de Processos")
             with st.expander("🔍 Filtros", expanded=True):
@@ -325,10 +323,10 @@ def main():
                 if filtro_status == "⚫ Encerrado":
                     processos_visiveis = [p for p in processos_visiveis if p.get("encerrado", False) is True]
                 else:
-                    processos_visiveis = [p for p in processos_visiveis 
-                                           if calcular_status_processo(converter_data(p.get("prazo")), 
-                                                                       p.get("houve_movimentacao", False),
-                                                                       p.get("encerrado", False)) == filtro_status]
+                    processos_visiveis = [p for p in processos_visiveis if calcular_status_processo(
+                        converter_data(p.get("prazo")),
+                        p.get("houve_movimentacao", False),
+                        p.get("encerrado", False)) == filtro_status]
             st.subheader("📊 Visão Geral")
             total = len(processos_visiveis)
             atrasados = len([p for p in processos_visiveis if calcular_status_processo(converter_data(p.get("prazo")), p.get("houve_movimentacao", False), p.get("encerrado", False)) == "🔴 Atrasado"])
@@ -341,15 +339,19 @@ def main():
             col3.metric("Para Atenção", atencao)
             col4.metric("Movimentados", movimentados)
             col5.metric("Encerrados", encerrados)
-            # Diagrama de pizza
+            # Gráfico de pizza
             if total > 0:
-                fig = px.pie(values=[atrasados, atencao, movimentados, encerrados, total - (atrasados+atencao+movimentados+encerrados)],
-                             names=["Atrasados", "Para Atenção", "Movimentados", "Encerrados", "Outros"],
-                             title="Distribuição dos Processos")
+                fig = px.pie(
+                    values=[atrasados, atencao, movimentados, encerrados, total - (atrasados + atencao + movimentados + encerrados)],
+                    names=["Atrasados", "Para Atenção", "Movimentados", "Encerrados", "Outros"],
+                    title="Distribuição dos Processos"
+                )
                 st.plotly_chart(fig)
             st.subheader("📋 Lista de Processos")
             if processos_visiveis:
-                df = pd.DataFrame(processos_visiveis)
+                # Para evitar KeyError, garantimos as colunas essenciais
+                cols_exibicao = ["numero", "cliente", "area", "prazo", "responsavel", "link_material"]
+                df = get_dataframe_with_cols(processos_visiveis, cols_exibicao)
                 df['Status'] = df.apply(lambda row: calcular_status_processo(
                                             converter_data(row.get("prazo")),
                                             row.get("houve_movimentacao", False),
@@ -358,10 +360,10 @@ def main():
                 status_order = {"🔴 Atrasado": 0, "🟡 Atenção": 1, "🟢 Normal": 2, "🔵 Movimentado": 3, "⚫ Encerrado": 4}
                 df['Status_Order'] = df['Status'].map(status_order)
                 df = df.sort_values('Status_Order').drop('Status_Order', axis=1)
-                # Se o link do material complementar existir, exibe como hiperlink
+                # Se o link do material complementar existir, converte para hiperlink
                 if "link_material" in df.columns:
                     df["link_material"] = df["link_material"].apply(lambda x: f"[Abrir Material]({x})" if x.strip() != "" else "")
-                st.dataframe(df[['numero', 'cliente', 'area', 'prazo', 'responsavel', 'Status', 'link_material']])
+                st.dataframe(df)
             else:
                 st.info("Nenhum processo encontrado com os filtros aplicados")
             
@@ -408,7 +410,7 @@ def main():
                                     st.error("Falha ao excluir processo.")
                 else:
                     st.warning("Processo não encontrado.")
-                    
+        
         # ----------------- Aba Clientes: Cadastro e Relatório -----------------
         elif escolha == "Clientes":
             st.subheader("👥 Cadastro de Clientes")
@@ -440,7 +442,8 @@ def main():
                             st.success("Cliente cadastrado com sucesso!")
             st.subheader("Lista de Clientes e Relatório")
             if CLIENTES:
-                st.dataframe(pd.DataFrame(CLIENTES))
+                df_cliente = get_dataframe_with_cols(CLIENTES, ["nome", "email", "telefone", "endereco", "cadastro"])
+                st.dataframe(df_cliente)
                 if st.button("Exportar Relatório em PDF"):
                     texto_relatorio = "\n".join([
                         f'Nome: {c.get("nome", "")} | E-mail: {c.get("email", "")} | Telefone: {c.get("telefone", "")} | Endereço: {c.get("endereco", "")} | Cadastro: {c.get("cadastro", "")}'
@@ -465,7 +468,6 @@ def main():
                     valor_total = st.number_input("Valor Total (R$)*", min_value=0.0, format="%.2f")
                 with col2:
                     valor_movimentado = st.number_input("Valor Movimentado (R$)", min_value=0.0, format="%.2f")
-                # Novo campo para "prazo_inicial"
                 prazo_inicial = st.date_input("Prazo Inicial*", value=datetime.date.today())
                 prazo_final = st.date_input("Prazo Final*", value=datetime.date.today() + datetime.timedelta(days=30))
                 houve_movimentacao = st.checkbox("Houve movimentação recente?")
@@ -473,12 +475,11 @@ def main():
                 if area_usuario and area_usuario != "Todas":
                     st.info(f"Área definida para seu perfil: {area_usuario}")
                     area = area_usuario
-                # Campo para link do material complementar
                 link_material = st.text_input("Link do Material Complementar (opcional)")
                 encerrado = st.checkbox("Processo Encerrado?")
                 if st.form_submit_button("Salvar Processo"):
                     if not cliente_nome or not numero_processo or not descricao:
-                        st.warning("Campos obrigatórios não preenchidos!")
+                        st.warning("Campos obrigatórios (*) não preenchidos!")
                     else:
                         novo_processo = {
                             "cliente": cliente_nome,
@@ -488,7 +489,7 @@ def main():
                             "valor_total": valor_total,
                             "valor_movimentado": valor_movimentado,
                             "prazo_inicial": prazo_inicial.strftime("%Y-%m-%d"),
-                            "prazo": prazo_final.strftime("%Y-%m-%d"),  # prazo_final é o prazo antigo
+                            "prazo": prazo_final.strftime("%Y-%m-%d"),
                             "houve_movimentacao": houve_movimentacao,
                             "encerrado": encerrado,
                             "escritorio": st.session_state.dados_usuario.get("escritorio", "Global"),
@@ -502,18 +503,18 @@ def main():
                             st.success("Processo cadastrado com sucesso!")
             st.subheader("Lista de Processos Cadastrados")
             if PROCESSOS:
-                df = pd.DataFrame(PROCESSOS)
-                df['Status'] = df.apply(lambda row: calcular_status_processo(
-                                            converter_data(row.get("prazo")),
-                                            row.get("houve_movimentacao", False),
-                                            row.get("encerrado", False)
-                                        ), axis=1)
+                cols_proc = ["numero", "cliente", "area", "prazo", "responsavel", "link_material"]
+                df_proc = get_dataframe_with_cols(PROCESSOS, cols_proc)
+                df_proc['Status'] = df_proc.apply(lambda row: calcular_status_processo(
+                                                converter_data(row.get("prazo")),
+                                                row.get("houve_movimentacao", False),
+                                                row.get("encerrado", False)
+                                            ), axis=1)
                 status_order = {"🔴 Atrasado": 0, "🟡 Atenção": 1, "🟢 Normal": 2, "🔵 Movimentado": 3, "⚫ Encerrado": 4}
-                df['Status_Order'] = df['Status'].map(status_order)
-                df = df.sort_values('Status_Order').drop('Status_Order', axis=1)
-                # Converte link do material em hiperlink
-                df["link_material"] = df["link_material"].apply(lambda x: f"[Abrir Material]({x})" if x.strip() != "" else "")
-                st.dataframe(df[['numero', 'cliente', 'area', 'prazo', 'responsavel', 'Status', 'link_material']])
+                df_proc['Status_Order'] = df_proc['Status'].map(status_order)
+                df_proc = df_proc.sort_values('Status_Order').drop('Status_Order', axis=1)
+                df_proc["link_material"] = df_proc["link_material"].apply(lambda x: f"[Abrir Material]({x})" if x.strip() != "" else "")
+                st.dataframe(df_proc)
             else:
                 st.info("Nenhum processo cadastrado ainda.")
         
@@ -531,8 +532,7 @@ def main():
                             st.write(f"**Escritório:** {item.get('escritorio', '')}")
                             st.text_area("Conteúdo", value=item.get("conteudo", ""), key=item["data"], disabled=True)
                 else:
-                    st.info("Nenhum histórico encontrado para este processo.\n\nAlém disso, para consultar o site do TJMG, veja abaixo:")
-                    # Incorpora o site do TJMG via iframe (ajuste a URL conforme necessário)
+                    st.info("Nenhum histórico encontrado para este processo.\n\nPara consultar o site do TJMG, veja abaixo:")
                     st.components.v1.iframe("https://www.tjmg.jus.br/", height=600)
         
         # ----------------- Aba Relatórios: Processos e Escritórios -----------------
@@ -651,7 +651,6 @@ def main():
                         }
                         if enviar_dados_para_planilha("Funcionario", novo_funcionario):
                             st.success("Funcionário cadastrado com sucesso!")
-                            # Atualiza a lista de usuários a partir da planilha
                             st.session_state.USERS = carregar_usuarios_da_planilha()
             st.subheader("Lista de Funcionários")
             if FUNCIONARIOS:
@@ -660,9 +659,8 @@ def main():
                 else:
                     funcionarios_visiveis = FUNCIONARIOS
                 if funcionarios_visiveis:
-                    df_func = pd.DataFrame(funcionarios_visiveis)
+                    df_func = get_dataframe_with_cols(funcionarios_visiveis, ["nome", "email", "telefone", "usuario", "papel", "escritorio", "area"])
                     st.dataframe(df_func)
-                    # Botão de exportação (TXT e PDF)
                     col_export1, col_export2 = st.columns(2)
                     with col_export1:
                         if st.button("Exportar Funcionários (TXT)"):
@@ -720,8 +718,8 @@ def main():
                                 st.success("Escritório cadastrado com sucesso!")
             with tab2:
                 if ESCRITORIOS:
-                    st.dataframe(pd.DataFrame(ESCRITORIOS))
-                    # Botão de exportação para Escritórios (PDF e TXT)
+                    df_esc = get_dataframe_with_cols(ESCRITORIOS, ["nome", "endereco", "telefone", "email", "cnpj"])
+                    st.dataframe(df_esc)
                     col_exp1, col_exp2 = st.columns(2)
                     with col_exp1:
                         if st.button("Exportar Escritórios (TXT)"):

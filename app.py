@@ -457,7 +457,7 @@ def main():
                     else:
                         novo_lead = {
                             "nome": nome,
-                            "contato": contato,
+                            "numero": contato,
                             "email": email,
                             "data_aniversario": data_aniversario.strftime("%Y-%m-%d")
                         }

@@ -292,7 +292,6 @@ def main():
         if papel == "owner":
             opcoes.extend(["Gerenciar Escritórios", "Gerenciar Permissões"])
         elif papel == "manager":
-            # Se necessário, podemos repetir "Gerenciar Funcionários" para managers
             opcoes.extend(["Gerenciar Funcionários"])
         
         escolha = st.sidebar.selectbox("Menu", opcoes)
@@ -553,15 +552,14 @@ def main():
                     st.info("Nenhum histórico encontrado para esse processo.")
             st.write("**Consulta TJMG (iframe)**")
             iframe_html = """
-                <div style="overflow: auto; height:600px;">
-                  <iframe src="https://www.tjmg.jus.br/portal-tjmg/processos/andamento-processual/"
-                          style="width:100%; height:100%; border:none;" 
-                          scrolling="yes">
-                  </iframe>
-                </div>
-                """
-                st.components.v1.html(iframe_html, height=600)    
-
+<div style="overflow: auto; height:600px;">
+  <iframe src="https://www.tjmg.jus.br/portal-tjmg/processos/andamento-processual/"
+          style="width:100%; height:100%; border:none;" 
+          scrolling="yes">
+  </iframe>
+</div>
+"""
+            st.components.v1.html(iframe_html, height=600)
         
         # ------------------ Relatórios ------------------ #
         elif escolha == "Relatórios":
@@ -797,8 +795,6 @@ def main():
             else:
                 st.info("Nenhum funcionário cadastrado.")
         
-        # A aba "Petições IA" foi removida conforme solicitado.
-    
     else:
         st.info("Por favor, faça login para acessar o sistema.")
 

@@ -466,7 +466,7 @@ def main():
                             st.success("Lead cadastrado com sucesso!")
             st.subheader("Lista de Leads")
             if LEADS:
-                df_leads = get_dataframe_with_cols(LEADS, ["nome", "contato", "email", "data_aniversario"])
+                df_leads = get_dataframe_with_cols(LEADS, ["nome", "numero", "email", "data_aniversario"])
                 st.dataframe(df_leads)
                 col_ex, col_pdf = st.columns(2)
                 with col_ex:

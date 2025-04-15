@@ -48,7 +48,7 @@ def carregar_dados_da_planilha(tipo, debug=False):
         return []
 
 def enviar_dados_para_planilha(tipo, dados):
-    """Envia os dados para a planilha via Google Apps Script."""
+    """Envia dados para a planilha via Google Apps Script."""
     try:
         payload = {"tipo": tipo, **dados}
         with httpx.Client(timeout=10, follow_redirects=True) as client:
@@ -65,29 +65,22 @@ def enviar_dados_para_planilha(tipo, dados):
 def carregar_usuarios_da_planilha():
     """
     Carrega os usuários da aba "Funcionario" da planilha.
-    Retorna um dicionário indexado pela chave 'usuario'.
-    Cada registro deverá conter as colunas:
-      - usuario
-      - senha
-      - nome
-      - papel
-      - escritorio
-      - area
-    Caso a planilha não retorne dados, é garantido o usuário "dono".
+    Retorna um dicionário indexado pela chave 'usuario' (tudo em minúsculo e sem acentos).
     """
     funcionarios = carregar_dados_da_planilha("Funcionario") or []
     users_dict = {}
     if not funcionarios:
+        # Caso a planilha esteja vazia, garante pelo menos o usuário "dono"
         users_dict["dono"] = {
             "username": "dono",
             "senha": "dono123",
             "papel": "owner",
             "escritorio": "Global",
-            "area": "Todas",
-            "nome": "Dono"
+            "area": "Todas"
         }
         return users_dict
     for f in funcionarios:
+        # Certifique-se de que a planilha possua a coluna "usuario" (tudo sem acentos)
         user_key = f.get("usuario")
         if not user_key:
             continue
@@ -96,9 +89,7 @@ def carregar_usuarios_da_planilha():
             "senha": f.get("senha", ""),
             "papel": f.get("papel", "assistant"),
             "escritorio": f.get("escritorio", "Global"),
-            "area": f.get("area", "Todas"),
-            # A coluna "nome" é lida; caso não exista, usa o próprio usuário
-            "nome": f.get("nome", user_key)
+            "area": f.get("area", "Todas")
         }
         users_dict[user_key] = user_dict
     return users_dict
@@ -114,7 +105,8 @@ def login(usuario, senha):
 def calcular_status_processo(data_prazo, houve_movimentacao, encerrado=False):
     """
     Calcula o status do processo.
-    Se 'encerrado' for True, retorna "⚫ Encerrado". Caso contrário:
+    Se 'encerrado' for True, retorna "⚫ Encerrado". 
+    Caso contrário, aplica a lógica padrão:
       - "🔵 Movimentado" se houve movimentação;
       - "🔴 Atrasado" se o prazo já passou;
       - "🟡 Atenção" se faltam 10 ou menos dias;
@@ -149,7 +141,6 @@ def consultar_movimentacoes_simples(numero_processo):
         return ["Erro ao consultar movimentações"]
 
 def exportar_pdf(texto, nome_arquivo="relatorio"):
-    """Exporta o texto para um arquivo PDF."""
     pdf = FPDF()
     pdf.add_page()
     pdf.set_font("Arial", size=12)
@@ -158,14 +149,12 @@ def exportar_pdf(texto, nome_arquivo="relatorio"):
     return f"{nome_arquivo}.pdf"
 
 def exportar_docx(texto, nome_arquivo="relatorio"):
-    """Exporta o texto para um arquivo DOCX."""
     doc = Document()
     doc.add_paragraph(texto)
     doc.save(f"{nome_arquivo}.docx")
     return f"{nome_arquivo}.docx"
 
 def gerar_relatorio_pdf(dados, nome_arquivo="relatorio"):
-    """Gera um relatório em PDF a partir de dados fornecidos."""
     pdf = FPDF()
     pdf.add_page()
     pdf.set_font("Arial", size=12)
@@ -194,7 +183,6 @@ def gerar_relatorio_pdf(dados, nome_arquivo="relatorio"):
     return f"{nome_arquivo}.pdf"
 
 def aplicar_filtros(dados, filtros):
-    """Aplica filtros (por data e campos textuais) aos dados."""
     def extrair_data(r):
         data_str = r.get("data_cadastro") or r.get("cadastro")
         if data_str:
@@ -227,13 +215,11 @@ def aplicar_filtros(dados, filtros):
     return resultados
 
 def atualizar_processo(numero_processo, atualizacoes):
-    """Envia atualização de um processo à planilha."""
     atualizacoes["numero"] = numero_processo
     atualizacoes["atualizar"] = True
     return enviar_dados_para_planilha("Processo", atualizacoes)
 
 def excluir_processo(numero_processo):
-    """Envia solicitação para exclusão de um processo."""
     payload = {"numero": numero_processo, "excluir": True}
     return enviar_dados_para_planilha("Processo", payload)
 
@@ -284,9 +270,9 @@ def main():
         papel = st.session_state.papel
         escritorio_usuario = st.session_state.dados_usuario.get("escritorio", "Global")
         area_usuario = st.session_state.dados_usuario.get("area", "Todas")
-        st.sidebar.success(f"Bem-vindo, {st.session_state.dados_usuario.get('nome', st.session_state.usuario)} ({papel})")
+        st.sidebar.success(f"Bem-vindo, {st.session_state.usuario} ({papel})")
         
-        # Se o usuário tiver área fixa (por exemplo, "Criminal"), forçamos esse filtro
+        # Se o usuário tiver área fixa (por exemplo, "Criminal"), forçamos esse filtro nos processos
         if area_usuario and area_usuario != "Todas":
             area_fixa = area_usuario
         else:

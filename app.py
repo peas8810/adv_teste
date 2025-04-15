@@ -552,7 +552,16 @@ def main():
                 else:
                     st.info("Nenhum histórico encontrado para esse processo.")
             st.write("**Consulta TJMG (iframe)**")
-            st.components.v1.iframe("https://www.tjmg.jus.br/portal-tjmg/processos/andamento-processual/", height=600)
+                iframe_html = """
+                <div style="overflow: auto; height:600px;">
+                  <iframe src="https://www.tjmg.jus.br/portal-tjmg/processos/andamento-processual/"
+                          style="width:100%; height:100%; border:none;" 
+                          scrolling="yes">
+                  </iframe>
+                </div>
+                """
+                st.components.v1.html(iframe_html, height=600)
+
         
         # ------------------ Relatórios ------------------ #
         elif escolha == "Relatórios":

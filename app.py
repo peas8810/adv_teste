@@ -43,6 +43,10 @@ def converter_data(data_str):
 
 @st.cache_data(ttl=300, show_spinner=False)
 def carregar_dados_da_planilha(tipo, debug=False):
+    """
+    Faz uma requisição ao Google Apps Script para carregar dados de uma aba específica.
+    Retorna uma lista de dicionários se houver dados ou um valor vazio em caso de erro.
+    """
     try:
         response = requests.get(GAS_WEB_APP_URL, params={"tipo": tipo}, timeout=10)
         response.raise_for_status()
@@ -55,6 +59,10 @@ def carregar_dados_da_planilha(tipo, debug=False):
         return []
 
 def enviar_dados_para_planilha(tipo, dados):
+    """
+    Envia os dados para a planilha (aba especificada em 'tipo') através do Google Apps Script.
+    Retorna True se o envio foi bem sucedido, False caso contrário.
+    """
     try:
         payload = {"tipo": tipo, **dados}
         with httpx.Client(timeout=10, follow_redirects=True) as client:
@@ -76,6 +84,7 @@ def carregar_usuarios_da_planilha():
     funcionarios = carregar_dados_da_planilha("Funcionario") or []
     users_dict = {}
     if not funcionarios:
+        # Caso não haja dados de funcionários, cria um usuário "dono" padrão
         users_dict["dono"] = {
             "username": "dono",
             "senha": "dono123",
@@ -106,13 +115,12 @@ def login(usuario, senha):
 
 def calcular_status_processo(data_prazo, houve_movimentacao, encerrado=False):
     """
-    Calcula o status do processo.
-    Se encerrado for True, retorna "⚫ Encerrado".
-    Caso contrário, segue:
-      - "🔵 Movimentado" se houve movimentação;
-      - "🔴 Atrasado" se o prazo passou;
-      - "🟡 Atenção" se faltam 10 dias ou menos;
-      - "🟢 Normal" caso contrário.
+    Calcula o status do processo de acordo com os critérios:
+    - "⚫ Encerrado": se encerrado == True
+    - "🔵 Movimentado": se houve movimentação
+    - "🔴 Atrasado": se o prazo já passou
+    - "🟡 Atenção": se faltam 10 dias ou menos
+    - "🟢 Normal": caso contrário
     """
     if encerrado:
         return "⚫ Encerrado"
@@ -128,6 +136,9 @@ def calcular_status_processo(data_prazo, houve_movimentacao, encerrado=False):
         return "🟢 Normal"
 
 def consultar_movimentacoes_simples(numero_processo):
+    """
+    Exemplo simples de consulta de movimentações (desatualizado) via scraping do TJSP.
+    """
     url = f"https://esaj.tjsp.jus.br/cpopg/show.do?processo.codigo={numero_processo}"
     try:
         r = requests.get(url, timeout=10)
@@ -156,6 +167,9 @@ def exportar_docx(texto, nome_arquivo="relatorio"):
     return f"{nome_arquivo}.docx"
 
 def gerar_relatorio_pdf(dados, nome_arquivo="relatorio"):
+    """
+    Exemplo simples de geração de relatório em PDF dos processos.
+    """
     pdf = FPDF()
     pdf.add_page()
     pdf.set_font("Arial", size=12)
@@ -184,6 +198,9 @@ def gerar_relatorio_pdf(dados, nome_arquivo="relatorio"):
     return f"{nome_arquivo}.pdf"
 
 def aplicar_filtros(dados, filtros):
+    """
+    Aplica os filtros de data e de strings, se houver. Retorna o subconjunto de dados que atende a todos os filtros.
+    """
     def extrair_data(r):
         data_str = r.get("data_cadastro") or r.get("cadastro")
         if data_str:
@@ -192,6 +209,7 @@ def aplicar_filtros(dados, filtros):
             except:
                 return None
         return None
+
     resultados = []
     for r in dados:
         incluir = True
@@ -208,6 +226,7 @@ def aplicar_filtros(dados, filtros):
                     incluir = False
                     break
             else:
+                # Filtro de string
                 if str(valor).lower() not in str(r.get(campo, "")).lower():
                     incluir = False
                     break
@@ -216,17 +235,25 @@ def aplicar_filtros(dados, filtros):
     return resultados
 
 def atualizar_processo(numero_processo, atualizacoes):
+    """
+    Atualiza um processo existente, enviando as mudanças ao GAS com "atualizar": True.
+    """
     atualizacoes["numero"] = numero_processo
     atualizacoes["atualizar"] = True
     return enviar_dados_para_planilha("Processo", atualizacoes)
 
 def excluir_processo(numero_processo):
+    """
+    Exclui um processo existente, enviando a requisição ao GAS com "excluir": True.
+    """
     payload = {"numero": numero_processo, "excluir": True}
     return enviar_dados_para_planilha("Processo", payload)
 
-# Função auxiliar para garantir que o DataFrame tenha as colunas desejadas
 def get_dataframe_with_cols(data, columns):
-    # Se data for um dicionário, converte para uma lista com um único elemento
+    """
+    Garante que o DataFrame contenha as colunas desejadas, adicionando-as se não existirem.
+    Se data for um dicionário individual, converte-o em lista de um único elemento.
+    """
     if isinstance(data, dict):
         data = [data]
     df = pd.DataFrame(data)
@@ -315,6 +342,7 @@ def main():
                 filtro_status = st.selectbox("Status", ["Todos", "🔴 Atrasado", "🟡 Atenção", "🟢 Normal", "🔵 Movimentado", "⚫ Encerrado"])
                 filtro_escritorio = st.selectbox("Escritório", ["Todos"] + list(set(p["escritorio"] for p in PROCESSOS)))
             
+            # Aplica filtros no PROCESSOS
             processos_visiveis = PROCESSOS.copy()
             if area_fixa:
                 processos_visiveis = [p for p in processos_visiveis if p.get("area") == area_fixa]
@@ -328,15 +356,31 @@ def main():
                 else:
                     processos_visiveis = [
                         p for p in processos_visiveis 
-                        if calcular_status_processo(converter_data(p.get("prazo")), 
-                                                    p.get("houve_movimentacao", False), 
-                                                    p.get("encerrado", False)) == filtro_status
+                        if calcular_status_processo(
+                            converter_data(p.get("prazo")),
+                            p.get("houve_movimentacao", False),
+                            p.get("encerrado", False)
+                        ) == filtro_status
                     ]
             
             st.subheader("📊 Visão Geral")
             total = len(processos_visiveis)
-            atrasados = len([p for p in processos_visiveis if calcular_status_processo(converter_data(p.get("prazo")), p.get("houve_movimentacao", False), p.get("encerrado", False)) == "🔴 Atrasado"])
-            atencao = len([p for p in processos_visiveis if calcular_status_processo(converter_data(p.get("prazo")), p.get("houve_movimentacao", False), p.get("encerrado", False)) == "🟡 Atenção"])
+            atrasados = len([
+                p for p in processos_visiveis 
+                if calcular_status_processo(
+                    converter_data(p.get("prazo")),
+                    p.get("houve_movimentacao", False),
+                    p.get("encerrado", False)
+                ) == "🔴 Atrasado"
+            ])
+            atencao = len([
+                p for p in processos_visiveis 
+                if calcular_status_processo(
+                    converter_data(p.get("prazo")),
+                    p.get("houve_movimentacao", False),
+                    p.get("encerrado", False)
+                ) == "🟡 Atenção"
+            ])
             movimentados = len([p for p in processos_visiveis if p.get("houve_movimentacao", False)])
             encerrados = len([p for p in processos_visiveis if p.get("encerrado", False) is True])
             
@@ -392,12 +436,15 @@ def main():
                     row.get("houve_movimentacao", False),
                     row.get("encerrado", False)
                 ), axis=1)
+                # Ordena pelo status
                 status_order = {"🔴 Atrasado": 0, "🟡 Atenção": 1, "🟢 Normal": 2, "🔵 Movimentado": 3, "⚫ Encerrado": 4}
                 df_proc['Status_Order'] = df_proc['Status'].map(status_order)
                 df_proc = df_proc.sort_values('Status_Order').drop('Status_Order', axis=1)
-                # Converte o link em hiperlink clicável, se houver
+                # Converte o link em hiperlink clicável
                 if "link_material" in df_proc.columns:
-                    df_proc["link_material"] = df_proc["link_material"].apply(lambda x: f"[Abrir Material]({x})" if isinstance(x, str) and x.strip() != "" else "")
+                    df_proc["link_material"] = df_proc["link_material"].apply(
+                        lambda x: f"[Abrir Material]({x})" if isinstance(x, str) and x.strip() != "" else ""
+                    )
                 st.dataframe(df_proc)
             else:
                 st.info("Nenhum processo encontrado com os filtros aplicados")
@@ -504,23 +551,25 @@ def main():
                     if not nome or not contato or not email:
                         st.warning("Preencha todos os campos obrigatórios!")
                     else:
+                        # Montamos o dicionário que será enviado para a aba "Lead"
                         novo_lead = {
                             "nome": nome,
                             "contato": contato,
                             "email": email,
                             "data_aniversario": data_aniversario.strftime("%Y-%m-%d"),
-                            "origem": "lead",  # Campo extra para identificar que se trata de um lead
+                            "origem": "lead",  # se desejar manter esse campo
                             "data_cadastro": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                         }
-                        if enviar_dados_para_planilha("Cliente", novo_lead):  # Enviando como "Cliente"
-                            LEADS = carregar_dados_da_planilha("Lead")
-                            if not isinstance(LEADS, list):
-                                LEADS = []
-                            LEADS.append(novo_lead)
+                        # Enviando diretamente para a aba "Lead"
+                        if enviar_dados_para_planilha("Lead", novo_lead):
+                            # Recarrega os leads após envio
+                            LEADS = carregar_dados_da_planilha("Lead") or []
                             st.success("Lead cadastrado com sucesso!")
+            
             st.subheader("Lista de Leads")
             if LEADS:
-                df_leads = get_dataframe_with_cols(LEADS, ["nome", "contato", "email", "data_aniversario"])
+                # Ajuste as colunas conforme a aba "Lead" no seu Google Sheet
+                df_leads = get_dataframe_with_cols(LEADS, ["nome", "contato", "email", "data_aniversario", "origem", "data_cadastro"])
                 st.dataframe(df_leads)
             else:
                 st.info("Nenhum lead cadastrado.")
@@ -571,6 +620,7 @@ def main():
                         if enviar_dados_para_planilha("Processo", novo_processo):
                             PROCESSOS.append(novo_processo)
                             st.success("Processo cadastrado com sucesso!")
+            
             st.subheader("Lista de Processos Cadastrados")
             if PROCESSOS:
                 cols_proc = ["numero", "cliente", "area", "prazo", "responsavel", "link_material"]
@@ -583,14 +633,15 @@ def main():
                 status_order = {"🔴 Atrasado": 0, "🟡 Atenção": 1, "🟢 Normal": 2, "🔵 Movimentado": 3, "⚫ Encerrado": 4}
                 df_proc['Status_Order'] = df_proc['Status'].map(status_order)
                 df_proc = df_proc.sort_values('Status_Order').drop('Status_Order', axis=1)
-                # Converte o link em hiperlink clicável, se houver
                 if "link_material" in df_proc.columns:
-                    df_proc["link_material"] = df_proc["link_material"].apply(lambda x: f"[Abrir Material]({x})" if isinstance(x, str) and x.strip() != "" else "")
+                    df_proc["link_material"] = df_proc["link_material"].apply(
+                        lambda x: f"[Abrir Material]({x})" if isinstance(x, str) and x.strip() != "" else ""
+                    )
                 st.dataframe(df_proc)
             else:
                 st.info("Nenhum processo cadastrado ainda.")
         
-        # ------------------ Históricos: Site do TJMG ------------------ #
+        # ------------------ Históricos (exemplo TJMG) ------------------ #
         elif escolha == "Históricos":
             st.subheader("📜 Histórico de Processos + Consulta TJMG")
             num_proc = st.text_input("Digite o número do processo para consultar o histórico")
@@ -605,11 +656,12 @@ def main():
                             st.text_area("Conteúdo", value=item.get("conteudo", ""), key=item["data"], disabled=True)
                 else:
                     st.info("Nenhum histórico encontrado para esse processo.")
+            
             st.write("**Consulta TJMG (iframe)**")
             iframe_html = """
 <div style="overflow: auto; height:600px;">
   <iframe src="https://www.tjmg.jus.br/portal-tjmg/processos/andamento-processual/"
-          style="width:100%; height:100%; border:none;" 
+          style="width:100%; height:100%; border:none;"
           scrolling="yes">
   </iframe>
 </div>
@@ -640,7 +692,9 @@ def main():
                         data_inicio = st.date_input("Data Início")
                         data_fim = st.date_input("Data Fim")
                         formato_exportacao = st.selectbox("Formato de Exportação", ["PDF", "DOCX", "CSV"])
+                    
                     if st.form_submit_button("Aplicar Filtros"):
+                        # Monta o dicionário de filtros
                         filtros = {}
                         if area_filtro and area_filtro != "Todas":
                             filtros["area"] = area_filtro
@@ -652,7 +706,7 @@ def main():
                             filtros["data_inicio"] = data_inicio
                         if data_fim:
                             filtros["data_fim"] = data_fim
-
+                        
                         if tipo_relatorio == "Processos":
                             dados_filtrados = aplicar_filtros(PROCESSOS, filtros)
                             if status_filtro != "Todos":
@@ -673,6 +727,7 @@ def main():
                             dados_filtrados = aplicar_filtros(ESCRITORIOS, filtros)
                             st.session_state.dados_relatorio = dados_filtrados
                             st.session_state.tipo_relatorio = "Escritórios"
+            
             if "dados_relatorio" in st.session_state and st.session_state.dados_relatorio:
                 st.write(f"{st.session_state.tipo_relatorio} encontrados: {len(st.session_state.dados_relatorio)}")
                 if st.button(f"Exportar Relatório ({formato_exportacao})"):
@@ -735,9 +790,11 @@ def main():
                         if enviar_dados_para_planilha("Funcionario", novo_funcionario):
                             st.success("Funcionário cadastrado com sucesso!")
                             st.session_state.USERS = carregar_usuarios_da_planilha()
+            
             st.subheader("Lista de Funcionários")
             if FUNCIONARIOS:
                 if papel == "manager":
+                    # Gerentes só podem ver funcionários do seu próprio escritório
                     funcionarios_visiveis = [f for f in FUNCIONARIOS if f.get("escritorio") == escritorio_usuario]
                 else:
                     funcionarios_visiveis = FUNCIONARIOS
@@ -747,11 +804,17 @@ def main():
                     col_export1, col_export2 = st.columns(2)
                     with col_export1:
                         if st.button("Exportar Funcionários (TXT)"):
-                            txt = "\n".join([f'{f.get("nome", "")} | {f.get("email", "")} | {f.get("telefone", "")}' for f in funcionarios_visiveis])
+                            txt = "\n".join([
+                                f'{f.get("nome", "")} | {f.get("email", "")} | {f.get("telefone", "")}'
+                                for f in funcionarios_visiveis
+                            ])
                             st.download_button("Baixar TXT", txt, file_name="funcionarios.txt")
                     with col_export2:
                         if st.button("Exportar Funcionários (PDF)"):
-                            texto_pdf = "\n".join([f'{f.get("nome", "")} | {f.get("email", "")} | {f.get("telefone", "")}' for f in funcionarios_visiveis])
+                            texto_pdf = "\n".join([
+                                f'{f.get("nome", "")} | {f.get("email", "")} | {f.get("telefone", "")}'
+                                for f in funcionarios_visiveis
+                            ])
                             pdf_file = exportar_pdf(texto_pdf, nome_arquivo="funcionarios")
                             with open(pdf_file, "rb") as f:
                                 st.download_button("Baixar PDF", f, file_name=pdf_file)
@@ -760,10 +823,11 @@ def main():
             else:
                 st.info("Nenhum funcionário cadastrado ainda")
         
-        # ------------------ Gerenciar Escritórios (Owner) ------------------ #
+        # ------------------ Gerenciar Escritórios (Apenas Owner) ------------------ #
         elif escolha == "Gerenciar Escritórios" and papel == "owner":
             st.subheader("🏢 Gerenciamento de Escritórios")
             tab1, tab2, tab3 = st.tabs(["Cadastrar Escritório", "Lista de Escritórios", "Administradores"])
+            
             with tab1:
                 with st.form("form_escritorio"):
                     st.subheader("Dados Cadastrais")
@@ -777,8 +841,12 @@ def main():
                     telefone_tecnico = st.text_input("Telefone do Responsável*")
                     email_tecnico = st.text_input("E-mail do Responsável*")
                     area_atuacao = st.multiselect("Áreas de Atuação", ["Cível", "Criminal", "Trabalhista", "Previdenciário", "Tributário"])
+                    
                     if st.form_submit_button("Salvar Escritório"):
-                        campos_obrigatorios = [nome, endereco, telefone, email, cnpj, responsavel_tecnico, telefone_tecnico, email_tecnico]
+                        campos_obrigatorios = [
+                            nome, endereco, telefone, email,
+                            cnpj, responsavel_tecnico, telefone_tecnico, email_tecnico
+                        ]
                         if not all(campos_obrigatorios):
                             st.warning("Todos os campos obrigatórios (*) devem ser preenchidos!")
                         else:
@@ -798,6 +866,7 @@ def main():
                             if enviar_dados_para_planilha("Escritorio", novo_escritorio):
                                 ESCRITORIOS.append(novo_escritorio)
                                 st.success("Escritório cadastrado com sucesso!")
+            
             with tab2:
                 if ESCRITORIOS:
                     df_esc = get_dataframe_with_cols(ESCRITORIOS, ["nome", "endereco", "telefone", "email", "cnpj"])
@@ -805,20 +874,28 @@ def main():
                     col_exp1, col_exp2 = st.columns(2)
                     with col_exp1:
                         if st.button("Exportar Escritórios (TXT)"):
-                            txt = "\n".join([f'{e.get("nome", "")} | {e.get("endereco", "")} | {e.get("telefone", "")}' for e in ESCRITORIOS])
+                            txt = "\n".join([
+                                f'{e.get("nome", "")} | {e.get("endereco", "")} | {e.get("telefone", "")}'
+                                for e in ESCRITORIOS
+                            ])
                             st.download_button("Baixar TXT", txt, file_name="escritorios.txt")
                     with col_exp2:
                         if st.button("Exportar Escritórios (PDF)"):
-                            pdf_file = exportar_pdf("\n".join([f'{e.get("nome", "")} | {e.get("endereco", "")} | {e.get("telefone", "")}' for e in ESCRITORIOS]), nome_arquivo="escritorios")
+                            txt_exp = "\n".join([
+                                f'{e.get("nome", "")} | {e.get("endereco", "")} | {e.get("telefone", "")}'
+                                for e in ESCRITORIOS
+                            ])
+                            pdf_file = exportar_pdf(txt_exp, nome_arquivo="escritorios")
                             with open(pdf_file, "rb") as f:
                                 st.download_button("Baixar PDF", f, file_name=pdf_file)
                 else:
                     st.info("Nenhum escritório cadastrado ainda")
+            
             with tab3:
                 st.subheader("Administradores de Escritórios")
                 st.info("Aqui será possível cadastrar advogados administradores para cada escritório (funcionalidade em desenvolvimento).")
         
-        # ------------------ Gerenciar Permissões (Owner) ------------------ #
+        # ------------------ Gerenciar Permissões (Apenas Owner) ------------------ #
         elif escolha == "Gerenciar Permissões" and papel == "owner":
             st.subheader("🔧 Gerenciar Permissões de Funcionários")
             st.info("Configure as áreas de atuação do funcionário (limitando acesso a relatórios, clientes, processos e escritórios).")
@@ -830,14 +907,15 @@ def main():
                 if st.button("Atualizar Permissões"):
                     atualizado = False
                     for idx, func in enumerate(FUNCIONARIOS):
-                        # Verifica se o campo "nome" corresponde ao funcionário selecionado
+                        # Verifica se o "nome" corresponde ao funcionário selecionado
                         if func.get("nome") == funcionario_selecionado:
                             FUNCIONARIOS[idx]["area"] = ", ".join(novas_areas)
                             atualizado = True
-                            # Atualiza no dicionário de usuários
+                            # Atualiza no dicionário de usuários também
                             for key, user in st.session_state.USERS.items():
                                 if user.get("username") == func.get("usuario"):
                                     st.session_state.USERS[key]["area"] = ", ".join(novas_areas)
+                    
                     if atualizado:
                         if enviar_dados_para_planilha("Funcionario", {
                             "nome": funcionario_selecionado,
@@ -849,7 +927,7 @@ def main():
                             st.error("Falha ao atualizar permissões.")
             else:
                 st.info("Nenhum funcionário cadastrado.")
-        
+    
     else:
         st.info("Por favor, faça login para acessar o sistema.")
 

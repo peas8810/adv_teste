@@ -449,7 +449,7 @@ def main():
                     else:
                         # Cria o dicionário com os campos esperados na aba "Lead"
                         novo_lead = {"nome": nome,
-                                     "contato": contato,
+                                     "numero": contato,
                                      "email": email,
                                      "data_aniversario": data_aniversario.strftime("%Y-%m-%d")}
                         if enviar_dados_para_planilha("Lead", novo_lead):
@@ -457,14 +457,14 @@ def main():
                             st.success("Lead cadastrado com sucesso!")
             st.subheader("Lista de Leads")
             if LEADS:
-                df_leads = get_dataframe_with_cols(LEADS, ["nome", "contato", "email", "data_aniversario"])
+                df_leads = get_dataframe_with_cols(LEADS, ["nome", "numero", "email", "data_aniversario"])
                 st.dataframe(df_leads)
                 col_ex, col_pdf = st.columns(2)
                 with col_ex:
                     csv_bytes = df_leads.to_csv(index=False).encode("utf-8")
                     st.download_button("Baixar Excel", data=csv_bytes, file_name="leads.csv", mime="text/csv")
                 with col_pdf:
-                    texto_leads = "\n".join([f"Nome: {l.get('nome','')}, Contato: {l.get('contato','')}, E-mail: {l.get('email','')}, Data de Aniversário: {l.get('data_aniversario','')}" 
+                    texto_leads = "\n".join([f"Nome: {l.get('nome','')}, Contato: {l.get('numero','')}, E-mail: {l.get('email','')}, Data de Aniversário: {l.get('data_aniversario','')}" 
                                               for l in (LEADS if isinstance(LEADS, list) else [LEADS])])
                     pdf_file = exportar_pdf(texto_leads, nome_arquivo="relatorio_leads")
                     with open(pdf_file, "rb") as f:

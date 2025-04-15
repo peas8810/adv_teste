@@ -554,8 +554,8 @@ def main():
                         # Montamos o dicionário que será enviado para a aba "Lead"
                         novo_lead = {
                             "nome": nome,
-                            "contato": contato,
-                            "email": email,
+                            "contato": tipo_contato,
+                            "email": tipo_email,
                             "data_aniversario": data_aniversario.strftime("%Y-%m-%d"),
                             "origem": "lead",  # se desejar manter esse campo
                             "data_cadastro": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")

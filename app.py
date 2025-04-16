@@ -451,7 +451,7 @@ def main():
                         novo_lead = {"nome": nome,
                                      "numero": contato,
                                      "tipo_email": email,
-                                     "data_aniversario": data_aniversario.strftime("%Y-%m-%d %H:%M:%S")
+                                     "data_aniversario": data_aniversario.strftime("%Y-%m-%d %H:%M:%S"),
                                      "origem": "lead",  # se desejar manter esse campo
                                      "data_cadastro": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                                     }

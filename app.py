@@ -41,6 +41,10 @@ def converter_data(data_str):
 
 @st.cache_data(ttl=300, show_spinner=False)
 def carregar_dados_da_planilha(tipo, debug=False):
+    """
+    Faz uma requisição ao Google Apps Script para carregar dados de uma aba específica.
+    Retorna uma lista de dicionários se houver dados ou [] em caso de erro.
+    """
     try:
         response = requests.get(GAS_WEB_APP_URL, params={"tipo": tipo}, timeout=10)
         response.raise_for_status()
@@ -53,6 +57,10 @@ def carregar_dados_da_planilha(tipo, debug=False):
         return []
 
 def enviar_dados_para_planilha(tipo, dados):
+    """
+    Envia os dados para a aba especificada em 'tipo' via Google Apps Script.
+    Retorna True se o envio foi bem-sucedido.
+    """
     try:
         payload = {"tipo": tipo, **dados}
         with httpx.Client(timeout=10, follow_redirects=True) as client:
@@ -263,7 +271,7 @@ def main():
         st.sidebar.success(f"Bem-vindo, {st.session_state.usuario} ({papel})")
         area_fixa = area_usuario if (area_usuario and area_usuario != "Todas") else None
         
-        # Menu Principal (incluindo a opção "Gestão de Leads")
+        # Menu Principal (incluindo "Gestão de Leads")
         opcoes = ["Dashboard", "Clientes", "Gestão de Leads", "Processos", "Históricos", "Relatórios", "Gerenciar Funcionários"]
         if papel == "owner":
             opcoes.extend(["Gerenciar Escritórios", "Gerenciar Permissões"])
@@ -353,8 +361,7 @@ def main():
                 df_proc = df_proc.sort_values('Status_Order').drop('Status_Order', axis=1)
                 if "link_material" in df_proc.columns:
                     df_proc["link_material"] = df_proc["link_material"].apply(
-                        lambda x: f"[Abrir Material]({x})" if isinstance(x, str) and x.strip() != "" else ""
-                    )
+                        lambda x: f"[Abrir Material]({x})" if isinstance(x, str) and x.strip() != "" else "")
                 st.dataframe(df_proc)
             else:
                 st.info("Nenhum processo encontrado com os filtros aplicados")
@@ -414,11 +421,15 @@ def main():
                     if not nome or not email or not telefone or not endereco:
                         st.warning("Campos obrigatórios não preenchidos!")
                     else:
-                        novo_cliente = {"nome": nome, "email": email, "telefone": telefone,
+                        novo_cliente = {"nome": nome,
+                                        "email": email,
+                                        "telefone": telefone,
                                         "aniversario": aniversario.strftime("%Y-%m-%d"),
-                                        "endereco": endereco, "observacoes": observacoes,
+                                        "endereco": endereco,
+                                        "observacoes": observacoes,
                                         "cadastro": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                                        "responsavel": st.session_state.usuario, "escritorio": escritorio}
+                                        "responsavel": st.session_state.usuario,
+                                        "escritorio": escritorio}
                         if enviar_dados_para_planilha("Cliente", novo_cliente):
                             CLIENTES.append(novo_cliente)
                             st.success("Cliente cadastrado com sucesso!")
@@ -447,18 +458,30 @@ def main():
                     if not nome or not contato or not email:
                         st.warning("Preencha todos os campos obrigatórios!")
                     else:
-                        # Cria o dicionário com os campos esperados na aba "Lead"
                         novo_lead = {"nome": nome,
-                                     "numero": contato,
-                                     "tipo_email": email,
-                                     "data_aniversario": data_aniversario.strftime("%Y-%m-%d %H:%M:%S"),
-                                     "origem": "lead",  # se desejar manter esse campo
-                                     "data_cadastro": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                                    }
+                                     "contato": contato,
+                                     "email": email,
+                                     "data_aniversario": data_aniversario.strftime("%Y-%m-%d")}
                         if enviar_dados_para_planilha("Lead", novo_lead):
                             LEADS = carregar_dados_da_planilha("Lead") or []
                             st.success("Lead cadastrado com sucesso!")
-                  
+            st.subheader("Lista de Leads")
+            if LEADS:
+                df_leads = get_dataframe_with_cols(LEADS, ["nome", "contato", "email", "data_aniversario"])
+                st.dataframe(df_leads)
+                col_ex, col_pdf = st.columns(2)
+                with col_ex:
+                    csv_bytes = df_leads.to_csv(index=False).encode("utf-8")
+                    st.download_button("Baixar Excel", data=csv_bytes, file_name="leads.csv", mime="text/csv")
+                with col_pdf:
+                    texto_leads = "\n".join([f"Nome: {l.get('nome','')}, Contato: {l.get('contato','')}, E-mail: {l.get('email','')}, Data de Aniversário: {l.get('data_aniversario','')}" 
+                                              for l in (LEADS if isinstance(LEADS, list) else [LEADS])])
+                    pdf_file = exportar_pdf(texto_leads, nome_arquivo="relatorio_leads")
+                    with open(pdf_file, "rb") as f:
+                        st.download_button("Baixar PDF", f, file_name=pdf_file)
+            else:
+                st.info("Nenhum lead cadastrado.")
+        
         # ------------------ Processos ------------------ #
         elif escolha == "Processos":
             st.subheader("📄 Cadastro de Processos")
@@ -602,7 +625,8 @@ def main():
                         if st.session_state.tipo_relatorio == "Processos":
                             arquivo = gerar_relatorio_pdf(st.session_state.dados_relatorio)
                         elif st.session_state.tipo_relatorio == "Leads":
-                            texto = "\n".join([f"Nome: {l.get('nome','')}, Contato: {l.get('numero','')}, E-mail: {l.get('tipo_email','')}, Data de Aniversário: {l.get('data_aniversario','')}"
+                            # Corrigindo as chaves para os Leads: usa "contato" e "email"
+                            texto = "\n".join([f"Nome: {l.get('nome','')}, Contato: {l.get('contato','')}, E-mail: {l.get('email','')}, Data de Aniversário: {l.get('data_aniversario','')}"
                                                 for l in st.session_state.dados_relatorio])
                             arquivo = exportar_pdf(texto, nome_arquivo="relatorio_leads")
                         else:
@@ -613,7 +637,7 @@ def main():
                         if st.session_state.tipo_relatorio == "Processos":
                             texto = "\n".join([f"{p['numero']} - {p['cliente']}" for p in st.session_state.dados_relatorio])
                         elif st.session_state.tipo_relatorio == "Leads":
-                            texto = "\n".join([f"Nome: {l.get('nome','')}, Contato: {l.get('numero','')}, E-mail: {l.get('tipo_email','')}, Data de Aniversário: {l.get('data_aniversario','')}"
+                            texto = "\n".join([f"Nome: {l.get('nome','')}, Contato: {l.get('contato','')}, E-mail: {l.get('email','')}, Data de Aniversário: {l.get('data_aniversario','')}"
                                                 for l in st.session_state.dados_relatorio])
                         else:
                             texto = str(st.session_state.dados_relatorio)
@@ -627,11 +651,10 @@ def main():
                         st.dataframe(st.session_state.dados_relatorio)
                     elif formato_exportacao == "TXT":
                         if st.session_state.tipo_relatorio == "Leads":
-                            # Garante que os dados estejam em formato de lista de dicionários
                             leads_data = st.session_state.dados_relatorio
                             if not isinstance(leads_data, list):
                                 leads_data = [leads_data]
-                            texto = "\n".join([f"Nome: {l.get('nome','')}, Contato: {l.get('numero','')}, E-mail: {l.get('tipo_email','')}, Data de Aniversário: {l.get('data_aniversario','')}" 
+                            texto = "\n".join([f"Nome: {l.get('nome','')}, Contato: {l.get('contato','')}, E-mail: {l.get('email','')}, Data de Aniversário: {l.get('data_aniversario','')}"
                                                 for l in leads_data])
                             st.download_button("Baixar TXT", data=texto, file_name="relatorio_leads.txt", mime="text/plain")
                         else:

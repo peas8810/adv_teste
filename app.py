@@ -613,7 +613,7 @@ def main():
                         if st.session_state.tipo_relatorio == "Processos":
                             texto = "\n".join([f"{p['numero']} - {p['cliente']}" for p in st.session_state.dados_relatorio])
                         elif st.session_state.tipo_relatorio == "Leads":
-                            texto = "\n".join([f"Nome: {l.get('nome','')}, Contato: {l.get('contato','')}, E-mail: {l.get('email','')}, Data de Aniversário: {l.get('data_aniversario','')}"
+                            texto = "\n".join([f"Nome: {l.get('nome','')}, Contato: {l.get('numero','')}, E-mail: {l.get('tipo_email','')}, Data de Aniversário: {l.get('data_aniversario','')}"
                                                 for l in st.session_state.dados_relatorio])
                         else:
                             texto = str(st.session_state.dados_relatorio)
@@ -631,7 +631,7 @@ def main():
                             leads_data = st.session_state.dados_relatorio
                             if not isinstance(leads_data, list):
                                 leads_data = [leads_data]
-                            texto = "\n".join([f"Nome: {l.get('nome','')}, Contato: {l.get('contato','')}, E-mail: {l.get('email','')}, Data de Aniversário: {l.get('data_aniversario','')}" 
+                            texto = "\n".join([f"Nome: {l.get('nome','')}, Contato: {l.get('numero','')}, E-mail: {l.get('tipo_email','')}, Data de Aniversário: {l.get('data_aniversario','')}" 
                                                 for l in leads_data])
                             st.download_button("Baixar TXT", data=texto, file_name="relatorio_leads.txt", mime="text/plain")
                         else:

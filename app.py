@@ -458,23 +458,7 @@ def main():
                         if enviar_dados_para_planilha("Lead", novo_lead):
                             LEADS = carregar_dados_da_planilha("Lead") or []
                             st.success("Lead cadastrado com sucesso!")
-            st.subheader("Lista de Leads")
-            if LEADS:
-                df_leads = get_dataframe_with_cols(LEADS, ["nome", "numero", "email", "data_aniversario"])
-                st.dataframe(df_leads)
-                col_ex, col_pdf = st.columns(2)
-                with col_ex:
-                    csv_bytes = df_leads.to_csv(index=False).encode("utf-8")
-                    st.download_button("Baixar Excel", data=csv_bytes, file_name="leads.csv", mime="text/csv")
-                with col_pdf:
-                    texto_leads = "\n".join([f"Nome: {l.get('nome','')}, Contato: {l.get('numero','')}, E-mail: {l.get('tipo_email','')}, Data de Aniversário: {l.get('data_aniversario','')}" 
-                                              for l in (LEADS if isinstance(LEADS, list) else [LEADS])])
-                    pdf_file = exportar_pdf(texto_leads, nome_arquivo="relatorio_leads")
-                    with open(pdf_file, "rb") as f:
-                        st.download_button("Baixar PDF", f, file_name=pdf_file)
-            else:
-                st.info("Nenhum lead cadastrado.")
-        
+                  
         # ------------------ Processos ------------------ #
         elif escolha == "Processos":
             st.subheader("📄 Cadastro de Processos")
@@ -618,7 +602,7 @@ def main():
                         if st.session_state.tipo_relatorio == "Processos":
                             arquivo = gerar_relatorio_pdf(st.session_state.dados_relatorio)
                         elif st.session_state.tipo_relatorio == "Leads":
-                            texto = "\n".join([f"Nome: {l.get('nome','')}, Contato: {l.get('contato','')}, E-mail: {l.get('email','')}, Data de Aniversário: {l.get('data_aniversario','')}"
+                            texto = "\n".join([f"Nome: {l.get('nome','')}, Contato: {l.get('numero','')}, E-mail: {l.get('tipo_email','')}, Data de Aniversário: {l.get('data_aniversario','')}"
                                                 for l in st.session_state.dados_relatorio])
                             arquivo = exportar_pdf(texto, nome_arquivo="relatorio_leads")
                         else:

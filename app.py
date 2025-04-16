@@ -450,7 +450,7 @@ def main():
                         # Cria o dicionário com os campos esperados na aba "Lead"
                         novo_lead = {"nome": nome,
                                      "numero": contato,
-                                     "email": email,
+                                     "tipo_email": email,
                                      "data_aniversario": data_aniversario.strftime("%Y-%m-%d")}
                         if enviar_dados_para_planilha("Lead", novo_lead):
                             LEADS = carregar_dados_da_planilha("Lead") or []

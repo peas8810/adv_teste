@@ -164,28 +164,27 @@ def main():
     FUNCIONARIOS = carregar_dados_da_planilha("Funcionario") or []
     LEADS = carregar_dados_da_planilha("Lead") or []
 
+    def main():
     # Sidebar: login/logout
     with st.sidebar:
         st.header("🔐 Login")
         usr = st.text_input("Usuário")
         pwd = st.text_input("Senha", type="password")
         if st.button("Entrar"):
-            u = login(usr,pwd)
-            if u:
+            user = login(usr, pwd)
+            if user:
                 st.session_state.usuario = usr
-                st.session_state.papel   = u["papel"]
-                st.sidebar.success("Login realizado!")
-                st.experimental_rerun()
+                st.session_state.papel   = user["papel"]
+                st.success("Login realizado com sucesso!")
+                return        # sai de main() para forçar redraw
             else:
                 st.error("Credenciais inválidas")
+        
         if "usuario" in st.session_state and st.button("Sair"):
-            for k in ["usuario","papel"]: st.session_state.pop(k,None)
-            st.sidebar.success("Desconectado")
-            st.experimental_rerun()
-
-    if "usuario" not in st.session_state:
-        st.info("Faça login para acessar o sistema.")
-        return
+            for k in ["usuario","papel"]:
+                st.session_state.pop(k, None)
+            st.success("Desconectado do sistema!")
+            return        # também sai de main()
 
     papel = st.session_state.papel
     dados_u = st.session_state.USERS[st.session_state.usuario]

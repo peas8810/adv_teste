@@ -32,6 +32,8 @@ def carregar_dados_da_planilha(tipo: str, debug: bool = False) -> list:
             st.text(f"URL chamada: {resp.url}")
             st.text(f"Resposta: {resp.text[:200]}")
         return resp.json()
+    except httpx.HTTPStatusError as e:
+        st.error(f"Erro de status HTTP ({tipo}): {e.response.status_code} - {e}")
     except httpx.RequestError as e:
         st.error(f"Erro de requisição ({tipo}): {e}")
     except ValueError as e:

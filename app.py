@@ -166,25 +166,25 @@ def main():
 
     def main():
     # Sidebar: login/logout
-    with st.sidebar:
-        st.header("🔐 Login")
-        usr = st.text_input("Usuário")
-        pwd = st.text_input("Senha", type="password")
-        if st.button("Entrar"):
-            user = login(usr, pwd)
-            if user:
-                st.session_state.usuario = usr
-                st.session_state.papel   = user["papel"]
-                st.success("Login realizado com sucesso!")
-                return        # sai de main() para forçar redraw
-            else:
-                st.error("Credenciais inválidas")
-        
-        if "usuario" in st.session_state and st.button("Sair"):
-            for k in ["usuario","papel"]:
-                st.session_state.pop(k, None)
-            st.success("Desconectado do sistema!")
-            return        # também sai de main()
+        with st.sidebar:
+            st.header("🔐 Login")
+            usr = st.text_input("Usuário")
+            pwd = st.text_input("Senha", type="password")
+            if st.button("Entrar"):
+                user = login(usr, pwd)
+                if user:
+                    st.session_state.usuario = usr
+                    st.session_state.papel   = user["papel"]
+                    st.success("Login realizado com sucesso!")
+                    return        # sai de main() para forçar redraw
+                else:
+                    st.error("Credenciais inválidas")
+            
+            if "usuario" in st.session_state and st.button("Sair"):
+                for k in ["usuario","papel"]:
+                    st.session_state.pop(k, None)
+                st.success("Desconectado do sistema!")
+                return        # também sai de main()
 
     papel = st.session_state.papel
     dados_u = st.session_state.USERS[st.session_state.usuario]

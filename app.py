@@ -487,20 +487,24 @@ def main():
                                 "data_aniversario": data_aniversario.strftime("%Y-%m-%d")
                             }
                             if enviar_dados_para_planilha("Lead", novo_lead):
-                                # recarrega sempre como lista
-                                loaded = carregar_dados_da_planilha("Lead") or []
-                                LEADS = loaded if isinstance(loaded, list) else [loaded]
                                 st.success("Lead cadastrado com sucesso!")
             
-                # ————— Listagem e Exportação —————
-                # garante que LEADS seja sempre lista
-                leads_list = LEADS if isinstance(LEADS, list) else [LEADS]
+                # ————— Recarrega leads e garante formato de lista —————
+                carregado = carregar_dados_da_planilha("Lead") or []
+                leads_list = carregado if isinstance(carregado, list) else [carregado]
+            
+                # ————— Filtra entradas totalmente em branco —————
+                clean_leads = [
+                    l for l in leads_list
+                    if any(l.get(col, "").strip() for col in
+                           ["nome", "numero", "tipo_email", "data_aniversario", "origem", "data_cadastro"])
+                ]
             
                 st.subheader("Lista de Leads")
-                if leads_list:
+                if clean_leads:
                     # monta DataFrame conforme colunas na planilha
                     df_leads = get_dataframe_with_cols(
-                        leads_list,
+                        clean_leads,
                         ["nome", "numero", "tipo_email", "data_aniversario", "origem", "data_cadastro"]
                     )
                     st.dataframe(df_leads)
@@ -511,7 +515,7 @@ def main():
                             txt = "\n".join([
                                 f'{l.get("nome","")} | {l.get("numero","")} | {l.get("tipo_email","")} | '
                                 f'{l.get("data_aniversario","")} | {l.get("origem","")} | {l.get("data_cadastro","")}'
-                                for l in leads_list
+                                for l in clean_leads
                             ])
                             st.download_button("Baixar TXT", txt, file_name="leads.txt")
             
@@ -520,13 +524,14 @@ def main():
                             texto_pdf = "\n".join([
                                 f'{l.get("nome","")} | {l.get("numero","")} | {l.get("tipo_email","")} | '
                                 f'{l.get("data_aniversario","")} | {l.get("origem","")} | {l.get("data_cadastro","")}'
-                                for l in leads_list
+                                for l in clean_leads
                             ])
                             pdf_file = exportar_pdf(texto_pdf, nome_arquivo="leads")
                             with open(pdf_file, "rb") as f:
                                 st.download_button("Baixar PDF", f, file_name="leads.pdf")
                 else:
                     st.info("Nenhum lead cadastrado ainda")
+
         
         # ------------------ Processos ------------------ #
         elif escolha == "Processos":

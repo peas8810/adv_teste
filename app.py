@@ -236,7 +236,8 @@ def main():
     if not isinstance(HISTORICO_PETICOES, list):
         HISTORICO_PETICOES = []
     FUNCIONARIOS = carregar_dados_da_planilha("Funcionario") or []
-    LEADS = carregar_dados_da_planilha("Lead") or []  # Dados da aba "Lead"
+    LEADS = carregar_dados_da_planilha("Lead") or []
+    LEADS = LEADS if isinstance(LEADS, list) else [LEADS]
     
     #####################
     # Sidebar: Login e Logout
@@ -471,6 +472,8 @@ def main():
         # ------------------ Gestão de Leads ------------------ #
         elif escolha == "Gestão de Leads":
                 st.subheader("📇 Gestão de Leads")
+            
+                # ————— Formulário de cadastro —————
                 with st.form("form_lead"):
                     nome = st.text_input("Nome*", key="nome_lead")
                     contato = st.text_input("Contato*")
@@ -487,22 +490,21 @@ def main():
                                 "data_aniversario": data_aniversario.strftime("%Y-%m-%d")
                             }
                             if enviar_dados_para_planilha("Lead", novo_lead):
+                                # Recarrega imediatamente após salvar
+                                updated = carregar_dados_da_planilha("Lead") or []
+                                LEADS = updated if isinstance(updated, list) else [updated]
                                 st.success("Lead cadastrado com sucesso!")
             
-                # ————— Recarrega leads e garante formato de lista —————
-                carregado = carregar_dados_da_planilha("Lead") or []
-                leads_list = carregado if isinstance(carregado, list) else [carregado]
-            
-                # ————— Filtra entradas totalmente em branco —————
+                # ————— Prepara lista limpa para exibição —————
                 clean_leads = [
-                    l for l in leads_list
+                    l for l in LEADS
                     if any(l.get(col, "").strip() for col in
                            ["nome", "numero", "tipo_email", "data_aniversario", "origem", "data_cadastro"])
                 ]
             
+                # ————— Listagem e exportação —————
                 st.subheader("Lista de Leads")
                 if clean_leads:
-                    # monta DataFrame conforme colunas na planilha
                     df_leads = get_dataframe_with_cols(
                         clean_leads,
                         ["nome", "numero", "tipo_email", "data_aniversario", "origem", "data_cadastro"]

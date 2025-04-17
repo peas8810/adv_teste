@@ -490,11 +490,13 @@ def main():
                                 LEADS = carregar_dados_da_planilha("Lead") or []
                                 st.success("Lead cadastrado com sucesso!")
             
+                # ————————— Listagem e Exportação —————————
                 st.subheader("Lista de Leads")
                 if LEADS:
+                    # monta DataFrame conforme colunas na planilha
                     df_leads = get_dataframe_with_cols(
                         LEADS,
-                        ["nome", "contato", "email", "data_aniversario"]
+                        ["nome", "numero", "tipo_email", "data_aniversario", "origem", "data_cadastro"]
                     )
                     st.dataframe(df_leads)
             
@@ -502,7 +504,8 @@ def main():
                     with col_export1:
                         if st.button("Exportar Leads (TXT)"):
                             txt = "\n".join([
-                                f'{l.get("nome","")} | {l.get("contato","")} | {l.get("email","")}'
+                                f'{l.get("nome","")} | {l.get("numero","")} | {l.get("tipo_email","")} | '
+                                f'{l.get("data_aniversario","")} | {l.get("origem","")} | {l.get("data_cadastro","")}'
                                 for l in LEADS
                             ])
                             st.download_button("Baixar TXT", txt, file_name="leads.txt")
@@ -510,14 +513,16 @@ def main():
                     with col_export2:
                         if st.button("Exportar Leads (PDF)"):
                             texto_pdf = "\n".join([
-                                f'{l.get("nome","")} | {l.get("contato","")} | {l.get("email","")}'
+                                f'{l.get("nome","")} | {l.get("numero","")} | {l.get("tipo_email","")} | '
+                                f'{l.get("data_aniversario","")} | {l.get("origem","")} | {l.get("data_cadastro","")}'
                                 for l in LEADS
                             ])
                             pdf_file = exportar_pdf(texto_pdf, nome_arquivo="leads")
                             with open(pdf_file, "rb") as f:
-                                st.download_button("Baixar PDF", f, file_name=pdf_file)
+                                st.download_button("Baixar PDF", f, file_name="leads.pdf")
                 else:
                     st.info("Nenhum lead cadastrado ainda")
+
 
         
         # ------------------ Processos ------------------ #

@@ -502,7 +502,7 @@ def main():
                     with col_export1:
                         if st.button("Exportar Leads (TXT)"):
                             txt = "\n".join([
-                                f'{l.get("nome","")} | {l.get("numero","")} | {l.get("tipo_email","")}'
+                                f'{l.get("nome","")} | {l.get("contato","")} | {l.get("email","")}'
                                 for l in LEADS
                             ])
                             st.download_button("Baixar TXT", txt, file_name="leads.txt")
@@ -510,7 +510,7 @@ def main():
                     with col_export2:
                         if st.button("Exportar Leads (PDF)"):
                             texto_pdf = "\n".join([
-                                f'{l.get("nome","")} | {l.get("numero","")} | {l.get("tipo_email","")}'
+                                f'{l.get("nome","")} | {l.get("contato","")} | {l.get("email","")}'
                                 for l in LEADS
                             ])
                             pdf_file = exportar_pdf(texto_pdf, nome_arquivo="leads")

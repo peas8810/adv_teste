@@ -238,6 +238,9 @@ def main():
     FUNCIONARIOS = carregar_dados_da_planilha("Funcionario") or []
     LEADS = carregar_dados_da_planilha("Lead") or []
     LEADS = LEADS if isinstance(LEADS, list) else [LEADS]
+    if "LEADS" not in st.session_state:
+        carregado = carregar_dados_da_planilha("Lead") or []
+        st.session_state.LEADS = carregado if isinstance(carregado, list) else [carregado]
     
     #####################
     # Sidebar: Login e Logout
@@ -473,14 +476,14 @@ def main():
         elif escolha == "Gestão de Leads":
                 st.subheader("📇 Gestão de Leads")
             
-                # ————— Formulário de cadastro —————
-                with st.form("form_lead"):
-                    nome = st.text_input("Nome*", key="nome_lead")
-                    contato = st.text_input("Contato*")
-                    email = st.text_input("E-mail*")
+                # ———— Formulário de cadastro ———— 
+                with st.form("form_lead", clear_on_submit=True):
+                    nome           = st.text_input("Nome*", key="nome_lead")
+                    contato        = st.text_input("Contato*")
+                    email          = st.text_input("E-mail*")
                     data_aniversario = st.date_input("Data de Aniversário")
                     if st.form_submit_button("Salvar Lead"):
-                        if not nome or not contato or not email:
+                        if not (nome and contato and email):
                             st.warning("Preencha todos os campos obrigatórios!")
                         else:
                             novo_lead = {
@@ -490,19 +493,22 @@ def main():
                                 "data_aniversario": data_aniversario.strftime("%Y-%m-%d")
                             }
                             if enviar_dados_para_planilha("Lead", novo_lead):
-                                # Recarrega imediatamente após salvar
-                                updated = carregar_dados_da_planilha("Lead") or []
-                                LEADS = updated if isinstance(updated, list) else [updated]
+                                # recarrega todo o bloco de Leads no session_state
+                                carregado = carregar_dados_da_planilha("Lead") or []
+                                st.session_state.LEADS = (
+                                    carregado if isinstance(carregado, list) else [carregado]
+                                )
                                 st.success("Lead cadastrado com sucesso!")
             
-                # ————— Prepara lista limpa para exibição —————
+                # ———— Prepara lista limpa para exibição ———— 
+                leads = st.session_state.LEADS
                 clean_leads = [
-                    l for l in LEADS
-                    if any(l.get(col, "").strip() for col in
+                    l for l in leads
+                    if any(l.get(c, "").strip() for c in 
                            ["nome", "numero", "tipo_email", "data_aniversario", "origem", "data_cadastro"])
                 ]
             
-                # ————— Listagem e exportação —————
+                # ———— Listagem e Exportação ———— 
                 st.subheader("Lista de Leads")
                 if clean_leads:
                     df_leads = get_dataframe_with_cols(
@@ -511,29 +517,33 @@ def main():
                     )
                     st.dataframe(df_leads)
             
-                    col_export1, col_export2 = st.columns(2)
-                    with col_export1:
-                        if st.button("Exportar Leads (TXT)"):
-                            txt = "\n".join([
-                                f'{l.get("nome","")} | {l.get("numero","")} | {l.get("tipo_email","")} | '
-                                f'{l.get("data_aniversario","")} | {l.get("origem","")} | {l.get("data_cadastro","")}'
-                                for l in clean_leads
-                            ])
-                            st.download_button("Baixar TXT", txt, file_name="leads.txt")
+                    # prepara o mesmo texto para TXT e PDF
+                    export_text = "\n".join([
+                        f"{l['nome']} | {l['numero']} | {l['tipo_email']} | "
+                        f"{l['data_aniversario']} | {l.get('origem','')} | {l.get('data_cadastro','')}"
+                        for l in clean_leads
+                    ])
             
-                    with col_export2:
-                        if st.button("Exportar Leads (PDF)"):
-                            texto_pdf = "\n".join([
-                                f'{l.get("nome","")} | {l.get("numero","")} | {l.get("tipo_email","")} | '
-                                f'{l.get("data_aniversario","")} | {l.get("origem","")} | {l.get("data_cadastro","")}'
-                                for l in clean_leads
-                            ])
-                            pdf_file = exportar_pdf(texto_pdf, nome_arquivo="leads")
-                            with open(pdf_file, "rb") as f:
-                                st.download_button("Baixar PDF", f, file_name="leads.pdf")
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        st.download_button(
+                            label="📄 Baixar Leads (TXT)",
+                            data=export_text,
+                            file_name="leads.txt",
+                            mime="text/plain"
+                        )
+                    with col2:
+                        # gera PDF temporário e fornece download
+                        pdf_path = exportar_pdf(export_text, nome_arquivo="leads")
+                        with open(pdf_path, "rb") as pdf_file:
+                            st.download_button(
+                                label="📄 Baixar Leads (PDF)",
+                                data=pdf_file,
+                                file_name="leads.pdf",
+                                mime="application/pdf"
+                            )
                 else:
                     st.info("Nenhum lead cadastrado ainda")
-
         
         # ------------------ Processos ------------------ #
         elif escolha == "Processos":

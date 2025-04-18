@@ -15,8 +15,6 @@ st.set_page_config(page_title="Sistema Jurídico", layout="wide")
 load_dotenv()
 
 # Configuração da API DeepSeek e do Google Apps Script
-DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY", "sk-590cfea82f49426c94ff423d41a91f49")
-DEEPSEEK_ENDPOINT = "https://api.deepseek.com/v1/chat/completions"
 GAS_WEB_APP_URL = "https://script.google.com/macros/s/AKfycbzx0HbjObfhgU4lqVFBI05neopT-rb5tqlGbJU19EguKq8LmmtzkTPtZjnMgCNmz8OtLw/exec"
 
 # -------------------- Usuários Persistidos --------------------
@@ -273,7 +271,7 @@ def main():
         area_fixa = area_usuario if (area_usuario and area_usuario != "Todas") else None
         
         # Menu Principal (incluindo "Gestão de Leads")
-        opcoes = ["Dashboard", "Clientes", "Gestão de Leads", "Processos", "Históricos", "Relatórios", "Gerenciar Funcionários"]
+        opcoes = ["Dashboard", "Clientes", "Processos", "Históricos", "Gerenciar Funcionários"]
         if papel == "owner":
             opcoes.extend(["Gerenciar Escritórios", "Gerenciar Permissões"])
         elif papel == "manager":

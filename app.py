@@ -473,72 +473,72 @@ def main():
 
         
         # ------------------ Gestão de Leads ------------------ #
-       elif escolha == "Gestão de Leads":
-            st.subheader("📇 Gestão de Leads")
-        
-            # ———— Formulário de cadastro ————
-            with st.form("form_lead", clear_on_submit=True):
-                nome             = st.text_input("Nome*", key="nome_lead")
-                contato          = st.text_input("Contato*")
-                email            = st.text_input("E-mail*")
-                data_aniversario = st.date_input("Data de Aniversário")
-                if st.form_submit_button("Salvar Lead"):
-                    if not (nome and contato and email):
-                        st.warning("Preencha todos os campos obrigatórios!")
-                    else:
-                        novo_lead = {
-                            "nome": nome,
-                            "numero": contato,
-                            "tipo_email": email,
-                            "data_aniversario": data_aniversario.strftime("%Y-%m-%d")
-                        }
-                        if enviar_dados_para_planilha("Lead", novo_lead):
-                            # recarrega sessão
-                            carregado = carregar_dados_da_planilha("Lead") or []
-                            st.session_state.LEADS = carregado if isinstance(carregado, list) else [carregado]
-                            st.success("Lead cadastrado com sucesso!")
-        
-            # ———— Prepara lista limpa para exibição ————
-            leads = st.session_state.get("LEADS", [])
-            clean_leads = [
-                l for l in leads
-                if any(l.get(c, "").strip() for c in
-                       ["nome", "numero", "tipo_email", "data_aniversario", "origem", "data_cadastro"])
-            ]
-        
-            # ———— Listagem e exportação ————
-            st.subheader("Lista de Leads")
-            if clean_leads:
-                df_leads = get_dataframe_with_cols(
-                    clean_leads,
-                    ["nome", "numero", "tipo_email", "data_aniversario", "origem", "data_cadastro"]
-                )
-                st.dataframe(df_leads)
-        
-                export_txt = "\n".join([
-                    f"{l['nome']} | {l['numero']} | {l['tipo_email']} | {l['data_aniversario']} | {l.get('origem','')} | {l.get('data_cadastro','')}"
-                    for l in clean_leads
-                ])
-        
-                col1, col2 = st.columns(2)
-                with col1:
-                    st.download_button(
-                        "📄 Baixar Leads (TXT)",
-                        data=export_txt,
-                        file_name="leads.txt",
-                        mime="text/plain"
+           elif escolha == "Gestão de Leads":
+                st.subheader("📇 Gestão de Leads")
+            
+                # ———— Formulário de cadastro ————
+                with st.form("form_lead", clear_on_submit=True):
+                    nome             = st.text_input("Nome*", key="nome_lead")
+                    contato          = st.text_input("Contato*")
+                    email            = st.text_input("E-mail*")
+                    data_aniversario = st.date_input("Data de Aniversário")
+                    if st.form_submit_button("Salvar Lead"):
+                        if not (nome and contato and email):
+                            st.warning("Preencha todos os campos obrigatórios!")
+                        else:
+                            novo_lead = {
+                                "nome": nome,
+                                "numero": contato,
+                                "tipo_email": email,
+                                "data_aniversario": data_aniversario.strftime("%Y-%m-%d")
+                            }
+                            if enviar_dados_para_planilha("Lead", novo_lead):
+                                # recarrega sessão
+                                carregado = carregar_dados_da_planilha("Lead") or []
+                                st.session_state.LEADS = carregado if isinstance(carregado, list) else [carregado]
+                                st.success("Lead cadastrado com sucesso!")
+            
+                # ———— Prepara lista limpa para exibição ————
+                leads = st.session_state.get("LEADS", [])
+                clean_leads = [
+                    l for l in leads
+                    if any(l.get(c, "").strip() for c in
+                           ["nome", "numero", "tipo_email", "data_aniversario", "origem", "data_cadastro"])
+                ]
+            
+                # ———— Listagem e exportação ————
+                st.subheader("Lista de Leads")
+                if clean_leads:
+                    df_leads = get_dataframe_with_cols(
+                        clean_leads,
+                        ["nome", "numero", "tipo_email", "data_aniversario", "origem", "data_cadastro"]
                     )
-                with col2:
-                    pdf_path = exportar_pdf(export_txt, nome_arquivo="leads")
-                    with open(pdf_path, "rb") as pdf_file:
+                    st.dataframe(df_leads)
+            
+                    export_txt = "\n".join([
+                        f"{l['nome']} | {l['numero']} | {l['tipo_email']} | {l['data_aniversario']} | {l.get('origem','')} | {l.get('data_cadastro','')}"
+                        for l in clean_leads
+                    ])
+            
+                    col1, col2 = st.columns(2)
+                    with col1:
                         st.download_button(
-                            "📄 Baixar Leads (PDF)",
-                            data=pdf_file,
-                            file_name="leads.pdf",
-                            mime="application/pdf"
+                            "📄 Baixar Leads (TXT)",
+                            data=export_txt,
+                            file_name="leads.txt",
+                            mime="text/plain"
                         )
-            else:
-                st.info("Nenhum lead cadastrado ainda")
+                    with col2:
+                        pdf_path = exportar_pdf(export_txt, nome_arquivo="leads")
+                        with open(pdf_path, "rb") as pdf_file:
+                            st.download_button(
+                                "📄 Baixar Leads (PDF)",
+                                data=pdf_file,
+                                file_name="leads.pdf",
+                                mime="application/pdf"
+                            )
+                else:
+                    st.info("Nenhum lead cadastrado ainda")
 
     # ———— Exibe link e iframe da planilha ————
     st.write("**Planilha de Leads (Google Sheets)**")
@@ -552,21 +552,21 @@ def main():
 """
     st.components.v1.html(iframe_html, height=600)
 
-    # ———— Botão para exportar toda a planilha em PDF ————
-    if st.button("Exportar Planilha de Leads (PDF)"):
-        texto_planilha = "\n".join([
-            f"{l.get('nome','')} | {l.get('numero','')} | {l.get('tipo_email','')} | "
-            f"{l.get('data_aniversario','')} | {l.get('origem','')} | {l.get('data_cadastro','')}"
-            for l in clean_leads
-        ])
-        pdf_file = exportar_pdf(texto_planilha, nome_arquivo="planilha_leads")
-        with open(pdf_file, "rb") as f:
-            st.download_button(
-                "📄 Baixar Planilha de Leads (PDF)",
-                data=f,
-                file_name="planilha_leads.pdf",
-                mime="application/pdf"
-            )
+            # ———— Botão para exportar toda a planilha em PDF ————
+            if st.button("Exportar Planilha de Leads (PDF)"):
+                texto_planilha = "\n".join([
+                    f"{l.get('nome','')} | {l.get('numero','')} | {l.get('tipo_email','')} | "
+                    f"{l.get('data_aniversario','')} | {l.get('origem','')} | {l.get('data_cadastro','')}"
+                    for l in clean_leads
+                ])
+                pdf_file = exportar_pdf(texto_planilha, nome_arquivo="planilha_leads")
+                with open(pdf_file, "rb") as f:
+                    st.download_button(
+                        "📄 Baixar Planilha de Leads (PDF)",
+                        data=f,
+                        file_name="planilha_leads.pdf",
+                        mime="application/pdf"
+                    )
         
         # ------------------ Processos ------------------ #
         elif escolha == "Processos":

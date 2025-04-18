@@ -238,9 +238,6 @@ def main():
     FUNCIONARIOS = carregar_dados_da_planilha("Funcionario") or []
     LEADS = carregar_dados_da_planilha("Lead") or []
     LEADS = LEADS if isinstance(LEADS, list) else [LEADS]
-    if "LEADS" not in st.session_state:
-        carregado = carregar_dados_da_planilha("Lead") or []
-        st.session_state.LEADS = carregado if isinstance(carregado, list) else [carregado]
     
     #####################
     # Sidebar: Login e Logout
@@ -412,89 +409,132 @@ def main():
         
         # ------------------ Clientes ------------------ #
         elif escolha == "Clientes":
-            st.subheader("👥 Cadastro de Clientes")
-            with st.form("form_cliente", clear_on_submit=True):
-                nome = st.text_input("Nome Completo*", key="nome_cliente")
-                email = st.text_input("E-mail*")
-                telefone = st.text_input("Telefone*")
-                aniversario = st.date_input("Data de Nascimento")
-                endereco = st.text_input(
-                    "Endereço*", placeholder="Rua, número, bairro, cidade, CEP"
-                )
-                escritorio = st.selectbox(
-                    "Escritório", [e["nome"] for e in ESCRITORIOS] + ["Outro"]
-                )
-                tipo_cliente = st.selectbox(
-                    "Tipo de Cliente*", ["Ativo", "Inativo", "Lead"]
-                )
-                observacoes = st.text_area("Observações")
-                if st.form_submit_button("Salvar Cliente"):
-                    if not (nome and email and telefone and endereco):
-                        st.warning("Campos obrigatórios não preenchidos!")
-                    else:
-                        novo_cliente = {
-                            "nome": nome,
-                            "email": email,
-                            "telefone": telefone,
-                            "aniversario": aniversario.strftime("%Y-%m-%d"),
-                            "endereco": endereco,
-                            "escritorio": escritorio,
-                            "tipo_cliente": tipo_cliente,
-                            "observacoes": observacoes,
-                            "cadastro": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                            "responsavel": st.session_state.usuario,
-                        }
-                        if enviar_dados_para_planilha("Cliente", novo_cliente):
-                            CLIENTES.append(novo_cliente)
-                            st.success("Cliente cadastrado com sucesso!")
-        
-            st.subheader("Lista de Clientes")
-            if CLIENTES:
-                df_cliente = get_dataframe_with_cols(
-                    CLIENTES,
-                    ["nome", "email", "telefone", "endereco", "tipo_cliente", "cadastro"]
-                )
-                st.dataframe(df_cliente)
-        
-                col_export1, col_export2 = st.columns(2)
-                with col_export1:
-                    st.download_button(
-                        "📄 Baixar Clientes (TXT)",
-                        data="\n".join([
-                            f"{c['nome']} | {c['email']} | {c['telefone']} | {c['tipo_cliente']}"
-                            for c in CLIENTES
-                        ]),
-                        file_name="clientes.txt",
-                        mime="text/plain"
+                st.subheader("👥 Cadastro de Clientes")
+                with st.form("form_cliente"):
+                    nome = st.text_input("Nome Completo*", key="nome_cliente")
+                    email = st.text_input("E-mail*")
+                    telefone = st.text_input("Telefone*")
+                    aniversario = st.date_input("Data de Nascimento")
+                    endereco = st.text_input("Endereço*", placeholder="Rua, número, bairro, cidade, CEP")
+                    escritorio = st.selectbox("Escritório", [e["nome"] for e in ESCRITORIOS] + ["Outro"])
+                    observacoes = st.text_area("Observações")
+                    if st.form_submit_button("Salvar Cliente"):
+                        if not nome or not email or not telefone or not endereco:
+                            st.warning("Campos obrigatórios não preenchidos!")
+                        else:
+                            novo_cliente = {
+                                "nome": nome,
+                                "email": email,
+                                "telefone": telefone,
+                                "aniversario": aniversario.strftime("%Y-%m-%d"),
+                                "endereco": endereco,
+                                "observacoes": observacoes,
+                                "cadastro": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                                "responsavel": st.session_state.usuario,
+                                "escritorio": escritorio
+                            }
+                            if enviar_dados_para_planilha("Cliente", novo_cliente):
+                                CLIENTES.append(novo_cliente)
+                                st.success("Cliente cadastrado com sucesso!")
+            
+                st.subheader("Lista de Clientes")
+                if CLIENTES:
+                    # monta DataFrame com as colunas desejadas
+                    df_cliente = get_dataframe_with_cols(
+                        CLIENTES,
+                        ["nome", "email", "telefone", "endereco", "cadastro"]
                     )
-                with col_export2:
-                    texto_pdf = "\n".join([
-                        f"{c['nome']} | {c['email']} | {c['telefone']} | {c['tipo_cliente']}"
-                        for c in CLIENTES
-                    ])
-                    pdf_file = exportar_pdf(texto_pdf, nome_arquivo="clientes")
-                    with open(pdf_file, "rb") as f:
-                        st.download_button(
-                            "📄 Baixar Clientes (PDF)",
-                            data=f,
-                            file_name="clientes.pdf",
-                            mime="application/pdf"
-                        )
-            else:
-                st.info("Nenhum cliente cadastrado ainda")
-
-    # ——— Exibe a aba 'tipo_cliente' da planilha ———
-    tipos = carregar_dados_da_planilha("tipo_cliente") or []
-    tipos = tipos if isinstance(tipos, list) else [tipos]
-    st.subheader("📋 Tipos de Cliente (aba tipo_cliente)")
-    if tipos:
-        df_tipos = pd.DataFrame(tipos)
-        st.dataframe(df_tipos)
-    else:
-        st.info("Nenhum tipo de cliente cadastrado na planilha")
+                    st.dataframe(df_cliente)
+            
+                    # botões de exportação lado a lado
+                    col_export1, col_export2 = st.columns(2)
+                    with col_export1:
+                        if st.button("Exportar Clientes (TXT)"):
+                            txt = "\n".join([
+                                f'{c.get("nome","")} | {c.get("email","")} | {c.get("telefone","")}'
+                                for c in CLIENTES
+                            ])
+                            st.download_button("Baixar TXT", txt, file_name="clientes.txt")
+            
+                    with col_export2:
+                        if st.button("Exportar Clientes (PDF)"):
+                            texto_pdf = "\n".join([
+                                f'{c.get("nome","")} | {c.get("email","")} | {c.get("telefone","")}'
+                                for c in CLIENTES
+                            ])
+                            pdf_file = exportar_pdf(texto_pdf, nome_arquivo="clientes")
+                            with open(pdf_file, "rb") as f:
+                                st.download_button("Baixar PDF", f, file_name=pdf_file)
+                else:
+                    st.info("Nenhum cliente cadastrado ainda")
 
         
-                
+        # ------------------ Gestão de Leads ------------------ #
+        elif escolha == "Gestão de Leads":
+                st.subheader("📇 Gestão de Leads")
+            
+                # ————— Formulário de cadastro —————
+                with st.form("form_lead"):
+                    nome = st.text_input("Nome*", key="nome_lead")
+                    contato = st.text_input("Contato*")
+                    email = st.text_input("E-mail*")
+                    data_aniversario = st.date_input("Data de Aniversário")
+                    if st.form_submit_button("Salvar Lead"):
+                        if not nome or not contato or not email:
+                            st.warning("Preencha todos os campos obrigatórios!")
+                        else:
+                            novo_lead = {
+                                "nome": nome,
+                                "numero": contato,
+                                "tipo_email": email,
+                                "data_aniversario": data_aniversario.strftime("%Y-%m-%d")
+                            }
+                            if enviar_dados_para_planilha("Lead", novo_lead):
+                                # Recarrega imediatamente após salvar
+                                updated = carregar_dados_da_planilha("Lead") or []
+                                LEADS = updated if isinstance(updated, list) else [updated]
+                                st.success("Lead cadastrado com sucesso!")
+            
+                # ————— Prepara lista limpa para exibição —————
+                clean_leads = [
+                    l for l in LEADS
+                    if any(l.get(col, "").strip() for col in
+                           ["nome", "numero", "tipo_email", "data_aniversario", "origem", "data_cadastro"])
+                ]
+            
+                # ————— Listagem e exportação —————
+                st.subheader("Lista de Leads")
+                if clean_leads:
+                    df_leads = get_dataframe_with_cols(
+                        clean_leads,
+                        ["nome", "numero", "tipo_email", "data_aniversario", "origem", "data_cadastro"]
+                    )
+                    st.dataframe(df_leads)
+            
+                    col_export1, col_export2 = st.columns(2)
+                    with col_export1:
+                        if st.button("Exportar Leads (TXT)"):
+                            txt = "\n".join([
+                                f'{l.get("nome","")} | {l.get("numero","")} | {l.get("tipo_email","")} | '
+                                f'{l.get("data_aniversario","")} | {l.get("origem","")} | {l.get("data_cadastro","")}'
+                                for l in clean_leads
+                            ])
+                            st.download_button("Baixar TXT", txt, file_name="leads.txt")
+            
+                    with col_export2:
+                        if st.button("Exportar Leads (PDF)"):
+                            texto_pdf = "\n".join([
+                                f'{l.get("nome","")} | {l.get("numero","")} | {l.get("tipo_email","")} | '
+                                f'{l.get("data_aniversario","")} | {l.get("origem","")} | {l.get("data_cadastro","")}'
+                                for l in clean_leads
+                            ])
+                            pdf_file = exportar_pdf(texto_pdf, nome_arquivo="leads")
+                            with open(pdf_file, "rb") as f:
+                                st.download_button("Baixar PDF", f, file_name="leads.pdf")
+                else:
+                    st.info("Nenhum lead cadastrado ainda")
+
+        
         # ------------------ Processos ------------------ #
         elif escolha == "Processos":
                 st.subheader("📄 Cadastro de Processos")
@@ -849,4 +889,3 @@ def main():
 
 if __name__ == '__main__':
     main()
-

@@ -314,7 +314,7 @@ def main():
 """
         st.components.v1.html(iframe, height=600)
         
-        # ------------------ Relatórios ------------------ #
+     # ------------------ Relatórios ------------------ #
         elif escolha == "Relatórios":
             st.subheader("📊 Relatórios Personalizados")
             with st.expander("🔍 Filtros Avançados", expanded=True):
@@ -404,7 +404,7 @@ def main():
                         else:
                             st.info("A opção TXT está disponível apenas para o relatório de Leads.")
                     else:
-                        st.info("Nenhum dado encontrado com os filtros aplicados")
+                        st.info("Nenhum dado encontrado com os filtros aplicados")   
         
         # ------------------ Gerenciar Funcionários ------------------ #
         elif escolha == "Gerenciar Funcionários":

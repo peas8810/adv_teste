@@ -102,7 +102,7 @@ def exportar_docx(texto, nome_arquivo="relatorio"):
     return f"{nome_arquivo}.docx"
 
 # Interface Principal
- def main():
+def main():
     st.title("Sistema Jurídico")
 
     # Atualiza usuários

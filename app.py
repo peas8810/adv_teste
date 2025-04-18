@@ -315,7 +315,7 @@ def main():
         st.components.v1.html(iframe, height=600)
         
      # ------------------ Relatórios ------------------ #
-        elif escolha == "Relatórios":
+     elif escolha == "Relatórios":
             st.subheader("📊 Relatórios Personalizados")
             with st.expander("🔍 Filtros Avançados", expanded=True):
                 with st.form("form_filtros"):
@@ -404,10 +404,10 @@ def main():
                         else:
                             st.info("A opção TXT está disponível apenas para o relatório de Leads.")
                     else:
-                        st.info("Nenhum dado encontrado com os filtros aplicados")   
+                        st.info("Nenhum dado encontrado com os filtros aplicados")      
         
-        # ------------------ Gerenciar Funcionários ------------------ #
-        elif escolha == "Gerenciar Funcionários":
+      # ------------------ Gerenciar Funcionários ------------------ #
+      elif escolha == "Gerenciar Funcionários":
             st.subheader("👥 Cadastro de Funcionários")
             with st.form("form_funcionario"):
                 nome = st.text_input("Nome Completo*")
@@ -455,7 +455,7 @@ def main():
                 else:
                     st.info("Nenhum funcionário cadastrado para este escritório")
             else:
-                st.info("Nenhum funcionário cadastrado ainda")
+                st.info("Nenhum funcionário cadastrado ainda")    
         
         # ------------------ Gerenciar Escritórios (Apenas Owner) ------------------ #
         elif escolha == "Gerenciar Escritórios" and papel == "owner":

@@ -473,7 +473,7 @@ def main():
 
         
         # ------------------ Gestão de Leads ------------------ #
-           elif escolha == "Gestão de Leads":
+         elif escolha == "Gestão de Leads":
                 st.subheader("📇 Gestão de Leads")
             
                 # ———— Formulário de cadastro ————
@@ -552,21 +552,21 @@ def main():
 """
     st.components.v1.html(iframe_html, height=600)
 
-            # ———— Botão para exportar toda a planilha em PDF ————
-            if st.button("Exportar Planilha de Leads (PDF)"):
-                texto_planilha = "\n".join([
-                    f"{l.get('nome','')} | {l.get('numero','')} | {l.get('tipo_email','')} | "
-                    f"{l.get('data_aniversario','')} | {l.get('origem','')} | {l.get('data_cadastro','')}"
-                    for l in clean_leads
-                ])
-                pdf_file = exportar_pdf(texto_planilha, nome_arquivo="planilha_leads")
-                with open(pdf_file, "rb") as f:
-                    st.download_button(
-                        "📄 Baixar Planilha de Leads (PDF)",
-                        data=f,
-                        file_name="planilha_leads.pdf",
-                        mime="application/pdf"
-                    )
+    # ———— Botão para exportar toda a planilha em PDF ————
+                if st.button("Exportar Planilha de Leads (PDF)"):
+                    texto_planilha = "\n".join([
+                        f"{l.get('nome','')} | {l.get('numero','')} | {l.get('tipo_email','')} | "
+                        f"{l.get('data_aniversario','')} | {l.get('origem','')} | {l.get('data_cadastro','')}"
+                        for l in clean_leads
+                    ])
+                    pdf_file = exportar_pdf(texto_planilha, nome_arquivo="planilha_leads")
+                    with open(pdf_file, "rb") as f:
+                        st.download_button(
+                            "📄 Baixar Planilha de Leads (PDF)",
+                            data=f,
+                            file_name="planilha_leads.pdf",
+                            mime="application/pdf"
+                        )
         
         # ------------------ Processos ------------------ #
         elif escolha == "Processos":

@@ -167,52 +167,68 @@ def main():
         pass
 
     # ------------------ Clientes ------------------
-    elif escolha=="Clientes":
+    elif escolha == "Clientes":
         st.subheader("👥 Cadastro de Clientes")
         with st.form("form_cliente", clear_on_submit=True):
-            nome        = st.text_input("Nome Completo*", key="nome_cliente")
-            email       = st.text_input("E-mail*")
-            telefone    = st.text_input("Telefone*")
-            aniversario = st.date_input("Data de Nascimento")
-            endereco    = st.text_input("Endereço*", placeholder="Rua, nº, bairro, cidade, CEP")
-            escritorio  = st.selectbox("Escritório", [e["nome"] for e in ESCRITORIOS]+["Outro"])
-            tipo_cliente= st.selectbox("Tipo de Cliente*", ["Ativo","Inativo","Lead"])
-            observacoes = st.text_area("Observações")
+            nome         = st.text_input("Nome Completo*", key="nome_cliente")
+            email        = st.text_input("E-mail*")
+            telefone     = st.text_input("Telefone*")
+            aniversario  = st.date_input("Data de Nascimento")
+            endereco     = st.text_input("Endereço*", placeholder="Rua, número, bairro, cidade, CEP")
+            escritorio   = st.selectbox("Escritório", [e["nome"] for e in ESCRITORIOS] + ["Outro"])
+            tipo_cliente = st.selectbox("Tipo de Cliente*", ["Ativo", "Inativo", "Lead"])
+            observacoes  = st.text_area("Observações")
             if st.form_submit_button("Salvar Cliente"):
                 if not (nome and email and telefone and endereco):
-                    st.warning("Preencha todos os obrigatórios!")
+                    st.warning("Campos obrigatórios não preenchidos!")
                 else:
-                    novo = {
-                        "nome":nome,
-                        "email":email,
-                        "telefone":telefone,
-                        "aniversario":aniversario.strftime("%Y-%m-%d"),
-                        "endereco":endereco,
-                        "escritorio":escritorio,
-                        "tipo_cliente":tipo_cliente,
-                        "observacoes":observacoes,
-                        "cadastro":datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                        "responsavel":st.session_state.usuario
+                    novo_cliente = {
+                        "nome": nome,
+                        "email": email,
+                        "telefone": telefone,
+                        "aniversario": aniversario.strftime("%Y-%m-%d"),
+                        "endereco": endereco,
+                        "escritorio": escritorio,
+                        "tipo_cliente": tipo_cliente,
+                        "observacoes": observacoes,
+                        "cadastro": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                        "responsavel": st.session_state.usuario
                     }
-                    if enviar_dados_para_planilha("Cliente", novo):
-                        CLIENTES.append(novo)
+                    if enviar_dados_para_planilha("Cliente", novo_cliente):
+                        CLIENTES.append(novo_cliente)
                         st.success("Cliente cadastrado com sucesso!")
-
+    
         st.subheader("Lista de Clientes")
         if CLIENTES:
-            df = get_dataframe_with_cols(
+            df_cliente = get_dataframe_with_cols(
                 CLIENTES,
-                ["nome","email","telefone","endereco","tipo_cliente","cadastro"]
+                ["nome", "email", "telefone", "endereco", "tipo_cliente", "cadastro"]
             )
-            st.dataframe(df)
-            export_txt = "\n".join([f\"{c['nome']} | {c['email']} | {c['telefone']} | {c['tipo_cliente']}\" for c in CLIENTES])
-            col1,col2 = st.columns(2)
+            st.dataframe(df_cliente)
+    
+            # monta o texto de exportação corretamente
+            export_txt = "\n".join([
+                f"{c['nome']} | {c['email']} | {c['telefone']} | {c['tipo_cliente']}"
+                for c in CLIENTES
+            ])
+    
+            col1, col2 = st.columns(2)
             with col1:
-                st.download_button("📄 Baixar TXT", export_txt, "clientes.txt", "text/plain")
+                st.download_button(
+                    "📄 Baixar Clientes (TXT)",
+                    data=export_txt,
+                    file_name="clientes.txt",
+                    mime="text/plain"
+                )
             with col2:
-                pdf = exportar_pdf(export_txt, "clientes")
-                with open(pdf,"rb") as f:
-                    st.download_button("📄 Baixar PDF", f, "clientes.pdf", "application/pdf")
+                pdf_file = exportar_pdf(export_txt, nome_arquivo="clientes")
+                with open(pdf_file, "rb") as f:
+                    st.download_button(
+                        "📄 Baixar Clientes (PDF)",
+                        data=f,
+                        file_name="clientes.pdf",
+                        mime="application/pdf"
+                    )
         else:
             st.info("Nenhum cliente cadastrado ainda")
 

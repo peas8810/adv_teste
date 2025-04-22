@@ -598,8 +598,19 @@ def main():
                 st.info("Nenhum cliente cadastrado ainda")                  
         
         # ------------------ Processos ------------------ #
-        elif escolha == "Processos":
-            st.subheader("📄 Cadastro de Processos")
+       elif escolha == "Processos":
+             st.subheader("📄 Cadastro de Processos")
+             # ── início do form ──
+             with st.form("form_processo"):
+                 cliente_nome    = st.text_input("Cliente*")
+                 numero_processo = st.text_input("Número do Processo*")
+                 tipo_contrato   = st.selectbox("Tipo de Contrato*", ["Fixo","Por Ato","Contingência"])
+                 descricao       = st.text_area("Descrição do Caso*")
+                 # (adicione todos os seus campos aqui, indentados)
+                 if st.form_submit_button("Salvar Processo"):
+                     # lógica de criação de novo processo...
+                     st.success("Processo cadastrado com sucesso!")
+             # ── fim do form ──
             with st.form("form_processo"):
             st.subheader("Lista de Processos Cadastrados")        
             if PROCESSOS:

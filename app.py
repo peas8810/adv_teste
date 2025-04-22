@@ -19,12 +19,29 @@ load_dotenv()
 GAS_WEB_APP_URL = "https://script.google.com/macros/s/AKfycbzx0HbjObfhgU4lqVFBI05neopT-rb5tqlGbJU19EguKq8LmmtzkTPtZjnMgCNmz8OtLw/exec"
 
 # -------------------- Usuários Persistidos --------------------
-if "USERS" not in st.session_state:
-    st.session_state.USERS = {
-        "dono": {"username": "dono", "senha": "dono123", "papel": "owner"},
-        "gestor1": {"username": "gestor1", "senha": "gestor123", "papel": "manager", "escritorio": "Escritorio A", "area": "Todas"},
-        "adv1": {"username": "adv1", "senha": "adv123", "papel": "lawyer", "escritorio": "Escritorio A", "area": "Criminal"}
+USUARIOS_FIXOS = {
+    "dono": {
+        "username": "dono",
+        "senha": "dono123",
+        "papel": "owner",
+        "escritorio": "Global",
+        "area": "Todas"
+    },
+    "gestor1": {
+        "username": "gestor1",
+        "senha": "gestor123",
+        "papel": "manager",
+        "escritorio": "Escritorio A",
+        "area": "Todas"
+    },
+    "adv1": {
+        "username": "adv1",
+        "senha": "adv123",
+        "papel": "lawyer",
+        "escritorio": "Escritorio A",
+        "area": "Criminal"
     }
+}
 
 # -------------------- Funções Auxiliares --------------------
 def converter_data(data_str):
@@ -249,7 +266,12 @@ def buscar_processo_por_numero(numero, processos):
 def main():
     st.title("Sistema Jurídico")
     
-    st.session_state.USERS = carregar_usuarios_da_planilha()
+    # 1) carrega apenas os funcionários da planilha
+    usuarios_planilha = carregar_usuarios_da_planilha()
+
+    # 2) mescla com os usuários fixos, sem removê‑los
+    st.session_state.USERS = USUARIOS_FIXOS.copy()
+    st.session_state.USERS.update(usuarios_planilha)
     
     # Carrega os dados de cada aba
     CLIENTES = carregar_dados_da_planilha("Cliente") or []

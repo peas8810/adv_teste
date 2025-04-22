@@ -383,9 +383,19 @@ def main():
             st.subheader("✏️ Editar/Excluir Processo")
             col_busca, _ = st.columns([2, 3])
             with col_busca:
-                num_proc_edit = st.text_input("Número do Processo")
-                if st.button("🔍 Buscar Processo"):
-                    processo_alvo = buscar_processo_por_numero(num_proc_edit, PROCESSOS)
+                    col_busca, _ = st.columns([2, 3])
+                    with col_busca:
+                        num_proc_edit = st.text_input("Número do Processo")
+                        if st.button("🔍 Buscar Processo"):
+                            processo_alvo = buscar_processo_por_numero(num_proc_edit, PROCESSOS)
+                            if not processo_alvo:
+                                st.warning("Processo não encontrado.")
+                            else:
+                                st.session_state["processo_alvo"] = processo_alvo  # opcional, para manter estado
+                    # só exibimos o form se o processo foi encontrado
+                    if "processo_alvo" in st.session_state:
+                        processo_alvo = st.session_state["processo_alvo"]
+                        st.write("Edite os campos abaixo:")
                     if not processo_alvo:
                         st.warning("Processo não encontrado.")
                     else:

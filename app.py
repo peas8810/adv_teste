@@ -322,19 +322,21 @@ def main():
             col4.metric("Movimentados", movimentados)
             col5.metric("Encerrados", encerrados)
             hoje = datetime.date.today()
+            # Monta lista de aniversariantes de hoje, convertendo sempre o campo 'aniversario'
             aniversariantes = []
             for cliente in CLIENTES:
-                data_str = cliente.get("aniversario", "")
-                try:
-                    data_aniversario = datetime.datetime.strptime(data_str, "%Y-%m-%d").date()
-                    if data_aniversario.month == hoje.month and data_aniversario.day == hoje.day:
-                        aniversariantes.append(cliente)
-                except Exception:
-                    continue
+                data_aniversario = converter_data(cliente.get("aniversario", ""))
+                if data_aniversario.month == hoje.month and data_aniversario.day == hoje.day:
+                    aniversariantes.append({
+                        "nome": cliente.get("nome", "N/A"),
+                        "aniversario": data_aniversario
+                    })
+            
             st.markdown("### 🎂 Aniversariantes do Dia")
             if aniversariantes:
                 for a in aniversariantes:
-                    st.write(f"{a.get('nome', 'N/A')} - {a.get('aniversario', '')}")
+                    # aqui você controla o formato da data à vontade:
+                    st.write(f"{a['nome']} — {a['aniversario'].strftime('%d/%m/%Y')}")
             else:
                 st.info("Nenhum aniversariante para hoje.")
             if total > 0:
@@ -439,9 +441,9 @@ def main():
                 if CLIENTES:
                     # monta DataFrame com as colunas desejadas
                     df_cliente = get_dataframe_with_cols(
-                        CLIENTES,
-                        ["nome", "email", "telefone", "endereco", "cadastro"]
-                    )
+                    CLIENTES,
+                    ["nome", "email", "telefone", "aniversario", "endereco", "cadastro"]
+                )
                     st.dataframe(df_cliente)
             
                     # botões de exportação lado a lado

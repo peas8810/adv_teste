@@ -306,7 +306,7 @@ def main():
         #######################################
         # Dashboard
         #######################################
-        elif escolha == "Dashboard":
+        if escolha == "Dashboard":
             st.subheader("📋 Painel de Controle de Processos")
             with st.expander("🔍 Filtros", expanded=True):
                 col1, col2, col3 = st.columns(3)

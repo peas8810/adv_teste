@@ -756,18 +756,28 @@ def main():
                 df_func = pd.DataFrame(FUNCIONARIOS)
                 st.dataframe(df_func)
                 funcionario_selecionado = st.selectbox("Funcionário", df_func["nome"].tolist())
-                novas_areas = st.multiselect("Áreas Permitidas", ["Cível", "Criminal", "Trabalhista", "Previdenciário", "Tributário"])
+                novas_areas = st.multiselect(
+                    "Áreas Permitidas",
+                    ["Cível", "Criminal", "Trabalhista", "Previdenciário", "Tributário"]
+                )
                 if st.button("Atualizar Permissões"):
                     atualizado = False
-                    for idx, func in enumerate(FUNCIONARIOS):
-                        if func.get("nome") == funcionario_selecionado:
+                    # renomeei as variáveis para evitar shadowing
+                    for idx, funcionario_item in enumerate(FUNCIONARIOS):
+                        if funcionario_item.get("nome") == funcionario_selecionado:
                             FUNCIONARIOS[idx]["area"] = ", ".join(novas_areas)
                             atualizado = True
-                            for key, user in st.session_state.USERS.items():
-                                if user.get("username") == func.get("usuario"):
+                            for key, usuario_item in st.session_state.USERS.items():
+                                if usuario_item.get("username") == funcionario_item.get("usuario"):
                                     st.session_state.USERS[key]["area"] = ", ".join(novas_areas)
                     if atualizado:
-                        if enviar_dados_para_planilha("Funcionario", {"nome": funcionario_selecionado, "area": ", ".join(novas_areas), "atualizar": True}):
+                        payload = {
+                            "nome": funcionario_selecionado,
+                            "area": ", ".join(novas_areas),
+                            "atualizar": True
+                        }
+                        sucesso = enviar_dados_para_planilha("Funcionario", payload)
+                        if sucesso:
                             st.success("Permissões atualizadas com sucesso!")
                         else:
                             st.error("Falha ao atualizar permissões.")

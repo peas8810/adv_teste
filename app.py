@@ -392,25 +392,25 @@ def main():
             else:
                 st.info("Nenhum processo encontrado com os filtros aplicados")
                             # ===========================
-                # ✏️ Editar / Excluir Processo
-                # ===========================
-                # 1) inicializa a variável
+                # ======= Editar / Excluir Processo (sempre disponível) =======
                 processo_alvo = None
+                num_proc_edit = st.text_input("Número do Processo para editar/excluir")
+                if st.button("🔍 Buscar Processo"):
+                    proc = buscar_processo_por_numero(num_proc_edit, PROCESSOS)
+                    if proc:
+                        processo_alvo = proc
+                        st.session_state["processo_alvo"] = proc
+                    else:
+                        st.warning("Processo não encontrado.")
                 
-                # 2) input + botão de busca em colunas
-                col1, col2 = st.columns([3, 1])
-                with col1:
-                    num_proc_edit = st.text_input("Número do Processo para editar/excluir")
-                with col2:
-                    if st.button("🔍 Buscar Processo"):
-                        # faz a busca normalizada
-                        processo_encontrado = buscar_processo_por_numero(num_proc_edit, PROCESSOS)
-                        if processo_encontrado:
-                            processo_alvo = processo_encontrado
-                            # opcional: guarda no session_state para persistir entre reruns
-                            st.session_state["processo_alvo"] = processo_alvo
-                        else:
-                            st.warning("Processo não encontrado.")
+                if "processo_alvo" in st.session_state:
+                    processo_alvo = st.session_state["processo_alvo"]
+                
+                if processo_alvo:
+                    # … seu formulário de edição/exclusão …
+                elif num_proc_edit:
+                    # só mostra warning se o usuário tentou buscar e não achou
+                    st.warning("Processo não encontrado.")
                 
                 # 3) recupera de session_state caso setado
                 if "processo_alvo" in st.session_state:

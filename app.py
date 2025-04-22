@@ -12,7 +12,7 @@ from docx import Document
 import plotly.express as px
 
 # -------------------- Configurações Iniciais --------------------
-st.set_page_config(page_title="Sistema Jurídico", layout="wide")
+st.set_page_config(page_title="Sistema Jurídico - Fernanda Freitas", layout="wide")
 load_dotenv()
 
 # Configuração da API DeepSeek e do Google Apps Script

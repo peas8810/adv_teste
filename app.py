@@ -601,9 +601,7 @@ def main():
         elif escolha == "Processos":
             st.subheader("📄 Cadastro de Processos")
             with st.form("form_processo"):
-                # ... (seu form de criação permanece igual) ...
-            st.subheader("Lista de Processos Cadastrados")
-        
+            st.subheader("Lista de Processos Cadastrados")        
             if PROCESSOS:
                 # DataFrame + status
                 cols_proc = ["numero", "cliente", "area", "prazo", "responsavel", "link_material"]

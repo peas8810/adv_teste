@@ -568,8 +568,8 @@ def main():
                                 CLIENTES.append(novo_cliente)
                                 st.success("Cliente cadastrado com sucesso!")
             
-                st.subheader("Lista de Clientes")
-                if CLIENTES:
+              st.subheader("Lista de Clientes")
+              if CLIENTES:
                     # monta DataFrame com as colunas desejadas
                     df_cliente = get_dataframe_with_cols(
                     CLIENTES,
@@ -597,7 +597,7 @@ def main():
                             with open(pdf_file, "rb") as f:
                                 st.download_button("Baixar PDF", f, file_name=pdf_file)
                 else:
-                    st.info("Nenhum cliente cadastrado ainda")                
+                    st.info("Nenhum cliente cadastrado ainda")                  
         
         # ------------------ Processos ------------------ #
         elif escolha == "Processos":

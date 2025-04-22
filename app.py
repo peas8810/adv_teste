@@ -1,5 +1,6 @@
 import streamlit as st
 import datetime
+import time
 import httpx
 import requests
 import pandas as pd
@@ -38,21 +39,34 @@ def converter_data(data_str):
         return datetime.date.today()
 
 @st.cache_data(ttl=300, show_spinner=False)
-def carregar_dados_da_planilha(tipo, debug=False):
+def carregar_dados_da_planilha(tipo, debug=False, retries=3, timeout=30):
     """
-    Faz uma requisição ao Google Apps Script para carregar dados de uma aba específica.
-    Retorna uma lista de dicionários se houver dados ou [] em caso de erro.
+    Faz requisição ao Google Apps Script para carregar dados de uma aba específica,
+    tenta até `retries` vezes em caso de timeout, e retorna lista de dicts ou [].
     """
-    try:
-        response = requests.get(GAS_WEB_APP_URL, params={"tipo": tipo}, timeout=10)
-        response.raise_for_status()
-        if debug:
-            st.text(f"URL chamada: {response.url}")
-            st.text(f"Resposta bruta: {response.text[:500]}")
-        return response.json()
-    except Exception as e:
-        st.error(f"Erro ao carregar dados ({tipo}): {e}")
-        return []
+    for attempt in range(1, retries+1):
+        try:
+            response = requests.get(
+                GAS_WEB_APP_URL,
+                params={"tipo": tipo},
+                timeout=timeout
+            )
+            response.raise_for_status()
+            if debug:
+                st.text(f"[DEBUG] Tentativa {attempt} — URL: {response.url}")
+                st.text(f"[DEBUG] Resposta (primeiros 500 chars): {response.text[:500]}")
+            return response.json()
+        except requests.exceptions.ReadTimeout:
+            if attempt < retries:
+                st.warning(f"Timeout ao carregar '{tipo}', tentativa {attempt}/{retries}. Retentando em 2 s…")
+                time.sleep(2)
+                continue
+            else:
+                st.error(f"Timeout ao carregar dados ('{tipo}') após {retries} tentativas.")
+                return []
+        except Exception as e:
+            st.error(f"Erro ao carregar dados ('{tipo}'): {e}")
+            return []
 
 def enviar_dados_para_planilha(tipo, dados):
     """

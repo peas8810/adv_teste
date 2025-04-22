@@ -264,7 +264,7 @@ def buscar_processo_por_numero(numero, processos):
 # Interface Principal
 ##############################
 def main():
-    st.title("Sistema Jurídico")
+    st.title("Sistema Jurídico - Fernanda Freitas")
     
     # 1) carrega apenas os funcionários da planilha
     usuarios_planilha = carregar_usuarios_da_planilha()

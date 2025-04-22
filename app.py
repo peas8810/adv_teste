@@ -598,7 +598,7 @@ def main():
                 st.info("Nenhum cliente cadastrado ainda")                  
         
         # ------------------ Processos ------------------ #
-       elif escolha == "Processos":
+        elif escolha == "Processos":
              st.subheader("📄 Cadastro de Processos")
              # ── início do form ──
              with st.form("form_processo"):

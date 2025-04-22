@@ -380,65 +380,79 @@ def main():
                 st.dataframe(df_proc)
             else:
                 st.info("Nenhum processo encontrado com os filtros aplicados")
-            st.subheader("✏️ Editar/Excluir Processo")
-            col_busca, _ = st.columns([2, 3])
-            with col_busca:
-                    col_busca, _ = st.columns([2, 3])
-                    with col_busca:
-                        num_proc_edit = st.text_input("Número do Processo")
-                        if st.button("🔍 Buscar Processo"):
-                            processo_alvo = buscar_processo_por_numero(num_proc_edit, PROCESSOS)
-                            if not processo_alvo:
-                                st.warning("Processo não encontrado.")
-                            else:
-                                st.session_state["processo_alvo"] = processo_alvo  # opcional, para manter estado
-                    # só exibimos o form se o processo foi encontrado
-                    if "processo_alvo" in st.session_state:
-                        processo_alvo = st.session_state["processo_alvo"]
-                        st.write("Edite os campos abaixo:")
-                    if not processo_alvo:
-                        st.warning("Processo não encontrado.")
-                    else:
-                        st.session_state["processo_alvo"] = processo_alvo  # opcional, para manter estado
-            # só exibimos o form se o processo foi encontrado
-            if "processo_alvo" in st.session_state:
-                processo_alvo = st.session_state["processo_alvo"]
-                st.write("Edite os campos abaixo:")
-                # … resto do seu formulário de edição, usando `processo_alvo`
+                            # ===========================
+                # ✏️ Editar / Excluir Processo
+                # ===========================
+                # 1) inicializa a variável
+                processo_alvo = None
+                
+                # 2) input + botão de busca em colunas
+                col1, col2 = st.columns([3, 1])
+                with col1:
+                    num_proc_edit = st.text_input("Número do Processo para editar/excluir")
+                with col2:
+                    if st.button("🔍 Buscar Processo"):
+                        # faz a busca normalizada
+                        processo_encontrado = buscar_processo_por_numero(num_proc_edit, PROCESSOS)
+                        if processo_encontrado:
+                            processo_alvo = processo_encontrado
+                            # opcional: guarda no session_state para persistir entre reruns
+                            st.session_state["processo_alvo"] = processo_alvo
+                        else:
+                            st.warning("Processo não encontrado.")
+                
+                # 3) recupera de session_state caso setado
+                if "processo_alvo" in st.session_state:
+                    processo_alvo = st.session_state["processo_alvo"]
+                
+                # 4) só renderiza o form se realmente houver um processo alvo
                 if processo_alvo:
                     st.write("Edite os campos abaixo:")
-                    novo_cliente = st.text_input("Cliente", processo_alvo.get("cliente", ""))
-                    nova_descricao = st.text_area("Descrição", processo_alvo.get("descricao", ""))
-                    opcoes_status = ["🔴 Atrasado", "🟡 Atenção", "🟢 Normal", "🔵 Movimentado", "⚫ Encerrado"]
+                    # preenche campos com dados atuais
+                    novo_cliente    = st.text_input("Cliente", default_value=processo_alvo.get("cliente",""))
+                    nova_descricao  = st.text_area("Descrição", value=processo_alvo.get("descricao",""))
+                    opcoes_status   = ["🔴 Atrasado","🟡 Atenção","🟢 Normal","🔵 Movimentado","⚫ Encerrado"]
+                    # calcula índice inicial de status
                     try:
                         status_atual = calcular_status_processo(
                             converter_data(processo_alvo.get("prazo")),
                             processo_alvo.get("houve_movimentacao", False),
-                            processo_alvo.get("encerrado", False))
-                        indice_inicial = opcoes_status.index(status_atual)
-                    except Exception:
-                        indice_inicial = 2
-                    novo_status = st.selectbox("Status", opcoes_status, index=indice_inicial)
-                    novo_link = st.text_input("Link do Material Complementar (opcional)", value=processo_alvo.get("link_material", ""))
-                    if processo_alvo.get("link_material"):
-                        st.markdown(f"[Abrir Material]({processo_alvo.get('link_material')})")
+                            processo_alvo.get("encerrado", False)
+                        )
+                        idx = opcoes_status.index(status_atual)
+                    except ValueError:
+                        idx = 2
+                    novo_status     = st.selectbox("Status", opcoes_status, index=idx)
+                    novo_link       = st.text_input(
+                        "Link do Material Complementar (opcional)",
+                        value=processo_alvo.get("link_material","")
+                    )
+                
                     col_ed, col_exc = st.columns(2)
                     with col_ed:
                         if st.button("Atualizar Processo"):
-                            atualizacoes = {"cliente": novo_cliente, "descricao": nova_descricao,
-                                            "status_manual": novo_status, "link_material": novo_link}
-                            if atualizar_processo(num_proc_edit, atualizacoes):
+                            atualizacoes = {
+                                "cliente": processo_alvo.get("cliente","") if not novo_cliente else novo_cliente,
+                                "descricao": nova_descricao,
+                                "status_manual": novo_status,
+                                "link_material": novo_link
+                            }
+                            if atualizar_processo(processo_alvo.get("numero"), atualizacoes):
                                 st.success("Processo atualizado com sucesso!")
+                                # limpa o alvo para nova busca
+                                st.session_state.pop("processo_alvo", None)
                             else:
                                 st.error("Falha ao atualizar processo.")
                     with col_exc:
-                        if papel in ["manager", "owner"]:
-                            if st.button("Excluir Processo"):
-                                if excluir_processo(num_proc_edit):
-                                    PROCESSOS = [p for p in PROCESSOS if p.get("numero") != num_proc_edit]
-                                    st.success("Processo excluído com sucesso!")
-                                else:
-                                    st.error("Falha ao excluir processo.")
+                        if st.button("Excluir Processo"):
+                            if excluir_processo(processo_alvo.get("numero")):
+                                st.success("Processo excluído com sucesso!")
+                                # remove tanto do session_state quanto da lista local
+                                st.session_state.pop("processo_alvo", None)
+                                PROCESSOS[:] = [p for p in PROCESSOS if p.get("numero") != processo_alvo.get("numero")]
+                            else:
+                                st.error("Falha ao excluir processo.")
+
                 else:
                     st.warning("Processo não encontrado.")
         

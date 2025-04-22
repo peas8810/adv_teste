@@ -540,7 +540,7 @@ def main():
         
         # ------------------ Clientes ------------------ #
         elif escolha == "Clientes":
-                st.subheader("👥 Cadastro de Clientes")
+            st.subheader("👥 Cadastro de Clientes")
                 with st.form("form_cliente"):
                     nome = st.text_input("Nome Completo*", key="nome_cliente")
                     email = st.text_input("E-mail*")
@@ -597,7 +597,7 @@ def main():
                             with open(pdf_file, "rb") as f:
                                 st.download_button("Baixar PDF", f, file_name=pdf_file)
                 else:
-                    st.info("Nenhum cliente cadastrado ainda")            
+                    st.info("Nenhum cliente cadastrado ainda")                
         
         # ------------------ Processos ------------------ #
         elif escolha == "Processos":

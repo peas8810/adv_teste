@@ -541,7 +541,7 @@ def main():
         # ------------------ Clientes ------------------ #
         elif escolha == "Clientes":
             st.subheader("👥 Cadastro de Clientes")
-                with st.form("form_cliente"):
+            with st.form("form_cliente"):
                     nome = st.text_input("Nome Completo*", key="nome_cliente")
                     email = st.text_input("E-mail*")
                     telefone = st.text_input("Telefone*")

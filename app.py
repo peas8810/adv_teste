@@ -232,6 +232,17 @@ def get_dataframe_with_cols(data, columns):
             df[col] = ""
     return df[columns]
 
+def buscar_processo_por_numero(numero, processos):
+    """
+    Retorna o dict do processo cujo 'numero' coincide com o informado,
+    ou None se não encontrar.
+    """
+    for p in processos:
+        if p.get("numero") == numero:
+            return p
+    return None
+
+
 ##############################
 # Interface Principal
 ##############################

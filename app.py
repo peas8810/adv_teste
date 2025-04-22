@@ -599,99 +599,112 @@ def main():
         
         # ------------------ Processos ------------------ #
         elif escolha == "Processos":
-                st.subheader("📄 Cadastro de Processos")
-                with st.form("form_processo"):
-                    cliente_nome = st.text_input("Cliente*")
-                    numero_processo = st.text_input("Número do Processo*")
-                    tipo_contrato = st.selectbox("Tipo de Contrato*", ["Fixo", "Por Ato", "Contingência"])
-                    descricao = st.text_area("Descrição do Caso*")
-                    col1, col2 = st.columns(2)
-                    with col1:
-                        valor_total = st.number_input("Valor Total (R$)*", min_value=0.0, format="%.2f")
-                    with col2:
-                        valor_movimentado = st.number_input("Valor Movimentado (R$)", min_value=0.0, format="%.2f")
-                    prazo_inicial = st.date_input("Prazo Inicial*", value=datetime.date.today())
-                    prazo_final = st.date_input("Prazo Final*", value=datetime.date.today() + datetime.timedelta(days=30))
-                    houve_movimentacao = st.checkbox("Houve movimentação recente?")
-                    area = st.selectbox("Área Jurídica*", ["Cível", "Criminal", "Trabalhista", "Previdenciário", "Tributário"])
-                    if area_usuario and area_usuario != "Todas":
-                        st.info(f"Área definida para seu perfil: {area_usuario}")
-                        area = area_usuario
-                    link_material = st.text_input("Link do Material Complementar (opcional)")
-                    encerrado = st.checkbox("Processo Encerrado?")
-                    if st.form_submit_button("Salvar Processo"):
-                        if not cliente_nome or not numero_processo or not descricao:
-                            st.warning("Campos obrigatórios (*) não preenchidos!")
-                        else:
-                            novo_processo = {
-                                "cliente": cliente_nome,
-                                "numero": numero_processo,
-                                "contrato": tipo_contrato,
-                                "descricao": descricao,
-                                "valor_total": valor_total,
-                                "valor_movimentado": valor_movimentado,
-                                "prazo_inicial": prazo_inicial.strftime("%Y-%m-%d"),
-                                "prazo": prazo_final.strftime("%Y-%m-%d"),
-                                "houve_movimentacao": houve_movimentacao,
-                                "encerrado": encerrado,
-                                "escritorio": st.session_state.dados_usuario.get("escritorio", "Global"),
-                                "area": area,
-                                "responsavel": st.session_state.usuario,
-                                "link_material": link_material,
-                                "data_cadastro": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                            }
-                            if enviar_dados_para_planilha("Processo", novo_processo):
-                                PROCESSOS.append(novo_processo)
-                                st.success("Processo cadastrado com sucesso!")
-            
-                st.subheader("Lista de Processos Cadastrados")
-                if PROCESSOS:
-                    cols_proc = ["numero", "cliente", "area", "prazo", "responsavel", "link_material"]
-                    df_proc = get_dataframe_with_cols(PROCESSOS, cols_proc)
-                    df_proc['Status'] = df_proc.apply(
-                        lambda row: calcular_status_processo(
-                            converter_data(row.get("prazo")),
-                            row.get("houve_movimentacao", False),
-                            row.get("encerrado", False)
-                        ), axis=1
-                    )
-                    status_order = {
-                        "🔴 Atrasado": 0,
-                        "🟡 Atenção": 1,
-                        "🟢 Normal": 2,
-                        "🔵 Movimentado": 3,
-                        "⚫ Encerrado": 4
-                    }
-                    df_proc['Status_Order'] = df_proc['Status'].map(status_order)
-                    df_proc = df_proc.sort_values('Status_Order').drop('Status_Order', axis=1)
-            
-                    if "link_material" in df_proc.columns:
-                        df_proc["link_material"] = df_proc["link_material"].apply(
-                            lambda x: f"[Abrir Material]({x})" if isinstance(x, str) and x.strip() else ""
+            # 1) Formulário de cadastro
+            st.subheader("📄 Cadastro de Processos")
+            with st.form("form_processo"):
+                cliente_nome    = st.text_input("Cliente*")
+                numero_processo = st.text_input("Número do Processo*")
+                tipo_contrato   = st.selectbox("Tipo de Contrato*", ["Fixo", "Por Ato", "Contingência"])
+                descricao       = st.text_area("Descrição do Caso*")
+                col1, col2      = st.columns(2)
+                with col1:
+                    valor_total = st.number_input("Valor Total (R$)*", min_value=0.0, format="%.2f")
+                with col2:
+                    valor_movimentado = st.number_input("Valor Movimentado (R$)", min_value=0.0, format="%.2f")
+                prazo_inicial   = st.date_input("Prazo Inicial*", value=datetime.date.today())
+                prazo_final     = st.date_input("Prazo Final*", value=datetime.date.today() + datetime.timedelta(days=30))
+                houve_mov       = st.checkbox("Houve movimentação recente?")
+                area            = st.selectbox("Área Jurídica*", ["Cível", "Criminal", "Trabalhista", "Previdenciário", "Tributário"])
+                link_material   = st.text_input("Link do Material Complementar (opcional)")
+                encerrado       = st.checkbox("Processo Encerrado?")
+                if st.form_submit_button("Salvar Processo"):
+                    if not (cliente_nome and numero_processo and descricao):
+                        st.warning("Campos obrigatórios (*) não preenchidos!")
+                    else:
+                        novo = {
+                            "cliente": cliente_nome,
+                            "numero": numero_processo,
+                            "contrato": tipo_contrato,
+                            "descricao": descricao,
+                            "valor_total": valor_total,
+                            "valor_movimentado": valor_movimentado,
+                            "prazo_inicial": prazo_inicial.strftime("%Y-%m-%d"),
+                            "prazo": prazo_final.strftime("%Y-%m-%d"),
+                            "houve_movimentacao": houve_mov,
+                            "encerrado": encerrado,
+                            "escritorio": st.session_state.dados_usuario.get("escritorio", "Global"),
+                            "area": area,
+                            "responsavel": st.session_state.usuario,
+                            "link_material": link_material,
+                            "data_cadastro": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                        }
+                        if enviar_dados_para_planilha("Processo", novo):
+                            PROCESSOS.append(novo)
+                            st.success("Processo cadastrado com sucesso!")
+
+            # 2) Listagem
+            st.subheader("Lista de Processos Cadastrados")
+            if PROCESSOS:
+                cols_proc = ["numero", "cliente", "area", "prazo", "responsavel", "link_material"]
+                df_proc = get_dataframe_with_cols(PROCESSOS, cols_proc)
+                df_proc["Status"] = df_proc.apply(
+                    lambda r: calcular_status_processo(
+                        converter_data(r["prazo"]),
+                        r.get("houve_movimentacao", False),
+                        r.get("encerrado", False)
+                    ), axis=1
+                )
+                st.dataframe(df_proc)
+            else:
+                st.info("Nenhum processo cadastrado ainda")
+
+            # 3) Edição / Exclusão
+            st.markdown("---")
+            numeros = [p["numero"] for p in PROCESSOS]
+            if numeros:
+                selecionado = st.selectbox("Selecione o processo para editar/excluir", numeros, key="sel_proc")
+                proc = buscar_processo_por_numero(selecionado, PROCESSOS)
+                if proc:
+                    st.subheader(f"📝 Editando Processo: {selecionado}")
+                    cli_edit = st.text_input("Cliente", value=proc.get("cliente",""))
+                    desc_edit = st.text_area("Descrição", value=proc.get("descricao",""))
+                    status_opts = ["🔴 Atrasado","🟡 Atenção","🟢 Normal","🔵 Movimentado","⚫ Encerrado"]
+                    idx = status_opts.index(
+                        calcular_status_processo(
+                            converter_data(proc.get("prazo")),
+                            proc.get("houve_movimentacao", False),
+                            proc.get("encerrado", False)
                         )
-            
-                    st.dataframe(df_proc)
-            
-                    col_export1, col_export2 = st.columns(2)
-                    with col_export1:
-                        if st.button("Exportar Processos (TXT)"):
-                            txt = "\n".join([
-                                f'{p.get("numero","")} | {p.get("cliente","")} | {p.get("area","")} | {p.get("prazo","")} | {p.get("responsavel","")}'
-                                for p in PROCESSOS
-                            ])
-                            st.download_button("Baixar TXT", txt, file_name="processos.txt")
-            
-                    with col_export2:
-                        if st.button("Exportar Processos (PDF)"):
-                            texto_pdf = "\n".join([
-                                f'{p.get("numero","")} | {p.get("cliente","")} | {p.get("area","")} | {p.get("prazo","")} | {p.get("responsavel","")}'
-                                for p in PROCESSOS
-                            ])
-                            pdf_file = exportar_pdf(texto_pdf, nome_arquivo="processos")
-                            with open(pdf_file, "rb") as f:
-                                st.download_button("Baixar PDF", f, file_name="processos.pdf")
-                else:
-                    st.info("Nenhum processo cadastrado ainda")
+                    ) if proc.get("prazo") else 2
+                    stat_edit = st.selectbox("Status", status_opts, index=idx)
+                    link_edit = st.text_input("Link do Material (opcional)", value=proc.get("link_material",""))
+
+                    col_upd, col_del = st.columns(2)
+                    with col_upd:
+                        if st.button("Atualizar Processo", key="btn_atualiza"):
+                            dados_upd = {
+                                "cliente": cli_edit,
+                                "descricao": desc_edit,
+                                "status_manual": stat_edit,
+                                "link_material": link_edit
+                            }
+                            if atualizar_processo(selecionado, dados_upd):
+                                # refaz a lista em memória
+                                for p in PROCESSOS:
+                                    if p["numero"] == selecionado:
+                                        p.update(dados_upd)
+                                st.success("Processo atualizado com sucesso!")
+                            else:
+                                st.error("Falha ao atualizar processo.")
+                    with col_del:
+                        if st.button("Excluir Processo", key="btn_exclui"):
+                            if excluir_processo(selecionado):
+                                PROCESSOS[:] = [p for p in PROCESSOS if p["numero"] != selecionado]
+                                st.success("Processo excluído com sucesso!")
+                            else:
+                                st.error("Falha ao excluir processo.")
+            else:
+                st.info("Não há processos para editar.")
 
         
         # ------------------ Históricos ------------------ #

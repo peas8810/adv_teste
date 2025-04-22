@@ -391,10 +391,11 @@ def main():
                 st.dataframe(df_proc)
             else:
                 st.info("Nenhum processo encontrado com os filtros aplicados")
-                            # ===========================
+                          
                 # ======= Editar / Excluir Processo (sempre disponível) =======
                 processo_alvo = None
                 num_proc_edit = st.text_input("Número do Processo para editar/excluir")
+                
                 if st.button("🔍 Buscar Processo"):
                     proc = buscar_processo_por_numero(num_proc_edit, PROCESSOS)
                     if proc:
@@ -407,9 +408,12 @@ def main():
                     processo_alvo = st.session_state["processo_alvo"]
                 
                 if processo_alvo:
-                    # … seu formulário de edição/exclusão …
+                    # ─── Aqui vem o seu formulário de edição/exclusão de processo ───
+                    st.write("### Editando processo:", processo_alvo.get("numero"))
+                    # ... resto do seu código de edição/exclusão ...
+                
                 elif num_proc_edit:
-                    # só mostra warning se o usuário tentou buscar e não achou
+                    # só exibe aviso se o usuário já digitou algo e não encontrou
                     st.warning("Processo não encontrado.")
                 
                 # 3) recupera de session_state caso setado

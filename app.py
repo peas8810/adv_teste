@@ -331,10 +331,10 @@ def main():
         if escolha == "Dashboard":
             st.subheader("📋 Painel de Controle de Processos")
         
-            # filtros
+            # ── Filtros ──
             with st.expander("🔍 Filtros", expanded=True):
                 col1, col2, col3 = st.columns(3)
-                filtro_area = area_fixa if area_fixa else col1.selectbox(
+                filtro_area = area_fixa or col1.selectbox(
                     "Área",
                     ["Todas"] + sorted({p["area"] for p in PROCESSOS})
                 )
@@ -347,12 +347,13 @@ def main():
                     ["Todos"] + sorted({p["escritorio"] for p in PROCESSOS})
                 )
         
-            # aplica filtros
+            # ── Aplica filtros ──
             processos_visiveis = PROCESSOS.copy()
             if area_fixa:
                 processos_visiveis = [p for p in processos_visiveis if p["area"] == area_fixa]
             elif filtro_area != "Todas":
                 processos_visiveis = [p for p in processos_visiveis if p["area"] == filtro_area]
+        
             if filtro_status != "Todos":
                 if filtro_status == "⚫ Encerrado":
                     processos_visiveis = [p for p in processos_visiveis if p.get("encerrado", False)]
@@ -365,10 +366,11 @@ def main():
                             p.get("encerrado", False)
                         ) == filtro_status
                     ]
+        
             if filtro_escritorio != "Todos":
                 processos_visiveis = [p for p in processos_visiveis if p["escritorio"] == filtro_escritorio]
         
-            # métricas
+            # ── Métricas ──
             st.subheader("📊 Visão Geral")
             total = len(processos_visiveis)
             atrasados = len([p for p in processos_visiveis
@@ -392,7 +394,7 @@ def main():
             c4.metric("Movimentados", movimentados)
             c5.metric("Encerrados", encerrados)
         
-            # lista de processos
+            # ── Lista de Processos ──
             st.subheader("📋 Lista de Processos")
             if processos_visiveis:
                 cols = ["numero", "cliente", "area", "prazo", "responsavel", "link_material"]

@@ -330,21 +330,23 @@ def main():
         #######################################
         if escolha == "Dashboard":
             st.subheader("📋 Painel de Controle de Processos")
+        
+            # filtros
             with st.expander("🔍 Filtros", expanded=True):
                 col1, col2, col3 = st.columns(3)
-                filtro_area = area_fixa if area_fixa else st.selectbox(
+                filtro_area = area_fixa if area_fixa else col1.selectbox(
                     "Área",
                     ["Todas"] + sorted({p["area"] for p in PROCESSOS})
                 )
-                filtro_status = st.selectbox(
+                filtro_status = col2.selectbox(
                     "Status",
                     ["Todos", "🔴 Atrasado", "🟡 Atenção", "🟢 Normal", "🔵 Movimentado", "⚫ Encerrado"]
                 )
-                filtro_escritorio = st.selectbox(
+                filtro_escritorio = col3.selectbox(
                     "Escritório",
                     ["Todos"] + sorted({p["escritorio"] for p in PROCESSOS})
                 )
-
+        
             # aplica filtros
             processos_visiveis = PROCESSOS.copy()
             if area_fixa:
@@ -365,7 +367,7 @@ def main():
                     ]
             if filtro_escritorio != "Todos":
                 processos_visiveis = [p for p in processos_visiveis if p["escritorio"] == filtro_escritorio]
-
+        
             # métricas
             st.subheader("📊 Visão Geral")
             total = len(processos_visiveis)
@@ -389,7 +391,7 @@ def main():
             c3.metric("Atenção", atencao)
             c4.metric("Movimentados", movimentados)
             c5.metric("Encerrados", encerrados)
-
+        
             # lista de processos
             st.subheader("📋 Lista de Processos")
             if processos_visiveis:
@@ -402,141 +404,16 @@ def main():
                         r.get("encerrado", False)
                     ), axis=1
                 )
-                # ordena pela ordem lógica de status
                 ordem = {"🔴 Atrasado": 0, "🟡 Atenção": 1, "🟢 Normal": 2, "🔵 Movimentado": 3, "⚫ Encerrado": 4}
-                df_proc["ord"] = df_proc["Status"].map(ordem)
-                df_proc = df_proc.sort_values("ord").drop("ord", axis=1)
-
-                # transform link em markdown clicável
+                df_proc = df_proc.assign(ord=df_proc["Status"].map(ordem)) \
+                                 .sort_values("ord") \
+                                 .drop("ord", axis=1)
                 df_proc["link_material"] = df_proc["link_material"].apply(
                     lambda x: f"[Abrir Material]({x})" if x else ""
                 )
                 st.dataframe(df_proc)
             else:
                 st.info("Nenhum processo encontrado com os filtros aplicados")
-
-            # ===========================
-            # ✏️ Editar / Excluir Processo
-            # ===========================
-            processo_alvo = None
-            col_edi, col_bus = st.columns([3, 1])
-            with col_edi:
-                num_proc_edit = st.text_input("Número do Processo para editar/excluir")
-            with col_bus:
-                if st.button("🔍 Buscar Processo"):
-                    encontrado = buscar_processo_por_numero(num_proc_edit, PROCESSOS)
-                    if encontrado:
-                        processo_alvo = encontrado
-                        st.session_state["processo_alvo"] = encontrado
-                    else:
-                        st.warning("Processo não encontrado.")
-
-            if "processo_alvo" in st.session_state:
-                processo_alvo = st.session_state["processo_alvo"]
-
-            if processo_alvo:
-                st.write("### Editando Processo:", processo_alvo["numero"])
-                novo_cliente   = st.text_input("Cliente", value=processo_alvo.get("cliente", ""))
-                nova_descricao = st.text_area("Descrição", value=processo_alvo.get("descricao", ""))
-                opcs_status    = ["🔴 Atrasado", "🟡 Atenção", "🟢 Normal", "🔵 Movimentado", "⚫ Encerrado"]
-                try:
-                    idx = opcs_status.index(
-                        calcular_status_processo(
-                            converter_data(processo_alvo.get("prazo")),
-                            processo_alvo.get("houve_movimentacao", False),
-                            processo_alvo.get("encerrado", False)
-                        )
-                    )
-                except ValueError:
-                    idx = 2
-                novo_status = st.selectbox("Status", opcs_status, index=idx)
-                novo_link   = st.text_input(
-                    "Link do Material Complementar (opcional)",
-                    value=processo_alvo.get("link_material", "")
-                )
-
-                e1, e2 = st.columns(2)
-                with e1:
-                    if st.button("Atualizar Processo"):
-                        dados_atual = {
-                            "cliente": novo_cliente,
-                            "descricao": nova_descricao,
-                            "status_manual": novo_status,
-                            "link_material": novo_link
-                        }
-                        if atualizar_processo(processo_alvo["numero"], dados_atual):
-                            st.success("Processo atualizado com sucesso!")
-                            st.session_state.pop("processo_alvo", None)
-                        else:
-                            st.error("Falha ao atualizar processo.")
-                with e2:
-                    if st.button("Excluir Processo"):
-                        if excluir_processo(processo_alvo["numero"]):
-                            st.success("Processo excluído com sucesso!")
-                            st.session_state.pop("processo_alvo", None)
-                            PROCESSOS[:] = [
-                                p for p in PROCESSOS if p["numero"] != processo_alvo["numero"]
-                            ]
-                        else:
-                            st.error("Falha ao excluir processo.")
-
-            elif num_proc_edit:
-                st.warning("Processo não encontrado.")
-                
-                # 3) recupera de session_state caso setado
-                if "processo_alvo" in st.session_state:
-                    processo_alvo = st.session_state["processo_alvo"]
-                
-                # 4) só renderiza o form se realmente houver um processo alvo
-                if processo_alvo:
-                    st.write("Edite os campos abaixo:")
-                    # preenche campos com dados atuais
-                    novo_cliente    = st.text_input("Cliente", default_value=processo_alvo.get("cliente",""))
-                    nova_descricao  = st.text_area("Descrição", value=processo_alvo.get("descricao",""))
-                    opcoes_status   = ["🔴 Atrasado","🟡 Atenção","🟢 Normal","🔵 Movimentado","⚫ Encerrado"]
-                    # calcula índice inicial de status
-                    try:
-                        status_atual = calcular_status_processo(
-                            converter_data(processo_alvo.get("prazo")),
-                            processo_alvo.get("houve_movimentacao", False),
-                            processo_alvo.get("encerrado", False)
-                        )
-                        idx = opcoes_status.index(status_atual)
-                    except ValueError:
-                        idx = 2
-                    novo_status     = st.selectbox("Status", opcoes_status, index=idx)
-                    novo_link       = st.text_input(
-                        "Link do Material Complementar (opcional)",
-                        value=processo_alvo.get("link_material","")
-                    )
-                
-                    col_ed, col_exc = st.columns(2)
-                    with col_ed:
-                        if st.button("Atualizar Processo"):
-                            atualizacoes = {
-                                "cliente": processo_alvo.get("cliente","") if not novo_cliente else novo_cliente,
-                                "descricao": nova_descricao,
-                                "status_manual": novo_status,
-                                "link_material": novo_link
-                            }
-                            if atualizar_processo(processo_alvo.get("numero"), atualizacoes):
-                                st.success("Processo atualizado com sucesso!")
-                                # limpa o alvo para nova busca
-                                st.session_state.pop("processo_alvo", None)
-                            else:
-                                st.error("Falha ao atualizar processo.")
-                    with col_exc:
-                        if st.button("Excluir Processo"):
-                            if excluir_processo(processo_alvo.get("numero")):
-                                st.success("Processo excluído com sucesso!")
-                                # remove tanto do session_state quanto da lista local
-                                st.session_state.pop("processo_alvo", None)
-                                PROCESSOS[:] = [p for p in PROCESSOS if p.get("numero") != processo_alvo.get("numero")]
-                            else:
-                                st.error("Falha ao excluir processo.")
-
-                else:
-                    st.warning("Processo não encontrado.")
         
         # ------------------ Clientes ------------------ #
         elif escolha == "Clientes":

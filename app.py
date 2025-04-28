@@ -346,7 +346,22 @@ def main():
                     "Escritório",
                     ["Todos"] + sorted({p["escritorio"] for p in PROCESSOS})
                 )
-        
+
+            # ── Aniversariantes do Dia ──
+            hoje = datetime.date.today()
+            aniversariantes = []
+            for cliente in CLIENTES:
+                data_aniversario = converter_data(cliente.get("aniversario", ""))
+                if data_aniversario.month == hoje.month and data_aniversario.day == hoje.day:
+                    aniversariantes.append((cliente.get("nome", "N/A"), data_aniversario))
+
+            st.markdown("### 🎂 Aniversariantes do Dia")
+            if aniversariantes:
+                for nome, data in aniversariantes:
+                    st.write(f"{nome} — {data.strftime('%d/%m/%Y')}")
+            else:
+                st.info("Nenhum aniversariante para hoje.")
+                
             # ── Aplica filtros ──
             processos_visiveis = PROCESSOS.copy()
             if area_fixa:

@@ -143,24 +143,6 @@ def calcular_status_processo(data_prazo, houve_movimentacao, encerrado=False):
     else:
         return "🟢 Normal"
 
-# Monta lista de aniversariantes de hoje, convertendo sempre o campo 'aniversario'
-aniversariantes = []
-for cliente in CLIENTES:
-    data_aniversario = converter_data(cliente.get("aniversario", ""))
-    if data_aniversario.month == hoje.month and data_aniversario.day == hoje.day:
-        aniversariantes.append({
-            "nome": cliente.get("nome", "N/A"),
-            "aniversario": data_aniversario
-        })
-
-st.markdown("### 🎂 Aniversariantes do Dia")
-if aniversariantes:
-    for a in aniversariantes:
-        # aqui você controla o formato da data à vontade:
-        st.write(f"{a['nome']} — {a['aniversario'].strftime('%d/%m/%Y')}")
-else:
-    st.info("Nenhum aniversariante para hoje.")
-
 def consultar_movimentacoes_simples(numero_processo):
     url = f"https://esaj.tjsp.jus.br/cpopg/show.do?processo.codigo={numero_processo}"
     try:
